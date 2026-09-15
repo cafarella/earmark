@@ -731,6 +731,8 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         new ActionKindOption(ActionKind.WaveLinkMix, "Wave Link mix"),
         new ActionKindOption(ActionKind.DeviceVolume, "Set device volume"),
         new ActionKindOption(ActionKind.DeviceMute, "Mute device"),
+        new ActionKindOption(ActionKind.ApplicationVolume, "Set app volume"),
+        new ActionKindOption(ActionKind.ApplicationMute, "Mute app"),
         // RenameDevice is parked: it needs an elevated HKLM write (IPropertyStore is blocked even
         // when elevated) and can't ship to the Store, so it's hidden from the picker. The enum,
         // NewName field, and dormant ActionRow/XAML bits stay so existing rules still load and
@@ -874,16 +876,21 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     public bool MixPatternIsPick => MixMatchMode == PatternMatchMode.Exact;
     public bool MixPatternIsText => !MixPatternIsPick;
 
-    public bool RequiresAppPattern => Kind == ActionKind.ApplicationDevice;
+    public bool RequiresAppPattern => Kind is ActionKind.ApplicationDevice or ActionKind.ApplicationVolume or ActionKind.ApplicationMute;
     public bool IsDefaultAction => Kind == ActionKind.DefaultDevice;
     public bool IsWaveLinkAction => Kind == ActionKind.WaveLinkMix;
-    public bool RequiresVolumeSlider => Kind == ActionKind.DeviceVolume;
+    public bool RequiresVolumeSlider => Kind is ActionKind.DeviceVolume or ActionKind.ApplicationVolume;
     public bool RequiresNewName => Kind == ActionKind.RenameDevice;
     public bool RequiresDevicePattern => Kind is not ActionKind.RenameDevice; // every live kind needs one
 
     /// <summary>The Output/Input direction toggle applies to app + default-device actions.</summary>
     public bool ShowDirection => Kind is ActionKind.ApplicationDevice or ActionKind.DefaultDevice;
-    public bool ShowMuteToggle => Kind == ActionKind.DeviceMute;
+    public bool ShowMuteToggle => Kind is ActionKind.DeviceMute or ActionKind.ApplicationMute;
+
+    /// <summary>App volume / mute actions treat a blank device pattern as "every device".</summary>
+    public string DevicePatternPlaceholder => Kind is ActionKind.ApplicationVolume or ActionKind.ApplicationMute
+        ? "All devices"
+        : ".*Headphones.*";
     public bool ShowMembership => Kind == ActionKind.WaveLinkMix;
 
     /// <summary>Two-way bridge for the Output/Input ToggleSwitch (on = Input/Capture).</summary>
@@ -917,6 +924,8 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         ActionKind.DeviceVolume => "Set volume",
         ActionKind.DeviceMute => Muted ? "Mute" : "Unmute",
         ActionKind.RenameDevice => "Rename",
+        ActionKind.ApplicationVolume => "App volume",
+        ActionKind.ApplicationMute => Muted ? "Mute app" : "Unmute app",
         _ => Kind.ToString(),
     };
 
@@ -1090,6 +1099,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     {
         ActionKind.ApplicationDevice or ActionKind.DefaultDevice => Flow,
         ActionKind.DeviceVolume or ActionKind.DeviceMute or ActionKind.RenameDevice => null,
+        ActionKind.ApplicationVolume or ActionKind.ApplicationMute => EndpointFlow.Render,
         _ => EndpointFlow.Render,
     };
 
@@ -1233,6 +1243,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         OnPropertyChanged(nameof(RequiresVolumeSlider));
         OnPropertyChanged(nameof(RequiresNewName));
         OnPropertyChanged(nameof(RequiresDevicePattern));
+        OnPropertyChanged(nameof(DevicePatternPlaceholder));
         OnPropertyChanged(nameof(ShowDirection));
         OnPropertyChanged(nameof(ShowMuteToggle));
         OnPropertyChanged(nameof(ShowMembership));

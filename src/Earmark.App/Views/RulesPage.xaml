@@ -405,7 +405,7 @@
                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
                         <TextBox Grid.Row="1" Grid.Column="0"
-                                 PlaceholderText=".*Headphones.*"
+                                 PlaceholderText="{x:Bind DevicePatternPlaceholder, Mode=OneWay}"
                                  Text="{x:Bind DevicePattern, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
                                  Visibility="{x:Bind DevicePatternIsText, Mode=OneWay, Converter={StaticResource BooleanToVisibilityConverter}}" />
                         <controls:PickerComboBox Grid.Row="1" Grid.Column="0"
