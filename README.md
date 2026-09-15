@@ -21,6 +21,7 @@ An audio companion for Windows, built around a regex-driven rules engine. Routin
 
 - **Rule-based routing**: each rule is a list of conditions (all must hold) and a list of actions (all run in order, topmost wins per target).
 - **Four action types**: pin an app's render endpoint, pin an app's capture endpoint, set the system default output, set the system default input. Default actions can target the "default" role, the "communications" role, or both.
+- **Per-app volume and mute**: pin an app's volume or mute state, on every device it plays through or only on devices matching a pattern.
 - **Conditions**: `Device present` and `Device missing`, scoped to render, capture, or any flow. The same regex syntax as device patterns.
 - **Regex pattern matching**: `AppPattern` is tested against both process name and full executable path; `DevicePattern` against the device's friendly and display names.
 - **Live status**: rules dim when off, when shadowed by an earlier rule, or when their conditions are not met. Match counts and resolved devices appear inline as you edit.
