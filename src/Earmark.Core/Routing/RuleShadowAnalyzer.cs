@@ -8,7 +8,7 @@ namespace Earmark.Core.Routing;
 /// Detects, per rule, which of its active-branch actions are <i>shadowed</i> - fully superseded by
 /// an earlier (higher-priority) enabled rule that already claims the same target. The routing
 /// appliers are all first-match-wins in list order (per-app per-flow, per default flow+role, per
-/// device for volume/mute), so a later action targeting an already-claimed target never runs. This
+/// device for volume/mute, per session for app volume/mute), so a later action targeting an already-claimed target never runs. This
 /// drives the "this action won't execute" warning on the Rules page.
 ///
 /// Wave Link mix and the parked rename action are not analysed (the former needs the live Wave Link
@@ -124,6 +124,20 @@ public static class RuleShadowAnalyzer
                 foreach (var endpoint in MatchEndpointsAnyFlow(action.DevicePattern, action.DeviceMatchMode, endpoints))
                 {
                     keys.Add($"mute|{endpoint.Id}");
+                }
+                break;
+
+            case ActionKind.ApplicationVolume:
+                foreach (var session in sessions.Where(s => AppRuleResolver.TargetsSession(action, s, endpoints)))
+                {
+                    keys.Add($"appvol|{session.SessionInstanceId}");
+                }
+                break;
+
+            case ActionKind.ApplicationMute:
+                foreach (var session in sessions.Where(s => AppRuleResolver.TargetsSession(action, s, endpoints)))
+                {
+                    keys.Add($"appmute|{session.SessionInstanceId}");
                 }
                 break;
 
