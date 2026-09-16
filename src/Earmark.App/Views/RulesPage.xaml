@@ -148,6 +148,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -188,6 +189,15 @@
                                   SelectedItem="{x:Bind SelectedAppMode, Mode=OneWay}"
                                   SelectionChanged="OnAppModeChanged"
                                   ToolTipService.ToolTip="How the app is matched: Regex, Wildcard (* ?), or pick an exact app" />
+
+                        <Button Grid.Row="1" Grid.Column="2"
+                                Style="{StaticResource GhostIconButtonStyle}"
+                                Click="OnBrowseAppClicked"
+                                Tag="{x:Bind}"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Browse for an application">
+                            <FontIcon Glyph="&#xED25;" FontSize="12" />
+                        </Button>
                     </Grid>
                 </StackPanel>
             </Border>
@@ -323,6 +333,7 @@
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition Height="Auto" />
@@ -363,6 +374,15 @@
                                   SelectedItem="{x:Bind SelectedAppMode, Mode=OneWay}"
                                   SelectionChanged="OnAppModeChanged"
                                   ToolTipService.ToolTip="How the app is matched: Regex, Wildcard (* ?), or pick an exact app" />
+
+                        <Button Grid.Row="1" Grid.Column="2"
+                                Style="{StaticResource GhostIconButtonStyle}"
+                                Click="OnBrowseAppClicked"
+                                Tag="{x:Bind}"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Browse for an application">
+                            <FontIcon Glyph="&#xED25;" FontSize="12" />
+                        </Button>
                     </Grid>
 
                     <Grid ColumnSpacing="{StaticResource SpacingSmall}" RowSpacing="4" Visibility="{x:Bind RequiresDevicePattern, Mode=OneWay}">

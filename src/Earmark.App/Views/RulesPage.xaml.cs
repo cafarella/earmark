@@ -1,6 +1,9 @@
 using System.ComponentModel;
 
+using Earmark.App.Services;
 using Earmark.App.ViewModels;
+
+using Earmark.Core.Models;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -167,6 +170,28 @@ public sealed partial class RulesPage : Page
             FindAncestorRuleRow(fe) is RuleRow rule)
         {
             rule.DuplicateConditionCommand.Execute(row);
+        }
+    }
+
+    // Shared by the action and condition templates: a picked executable is an exact path, so the
+    // field switches to Exact mode before the path lands in it.
+    private async void OnBrowseAppClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement fe) return;
+
+        var path = await App.Current.Services.GetRequiredService<IExecutablePicker>().PickAsync();
+        if (path is null) return;
+
+        switch (fe.Tag)
+        {
+            case ActionRow action:
+                action.AppMatchMode = PatternMatchMode.Exact;
+                action.AppPattern = path;
+                break;
+            case ConditionRow condition:
+                condition.AppMatchMode = PatternMatchMode.Exact;
+                condition.AppPattern = path;
+                break;
         }
     }
 

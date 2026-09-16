@@ -77,6 +77,7 @@ internal static class HostBuilderExtensions
         builder.Services.AddSingleton<IWaveLinkVisualService, WaveLinkVisualService>();
         builder.Services.AddSingleton<INowPlayingArtworkService, NowPlayingArtworkService>();
         builder.Services.AddSingleton<IDeviceDefaultsService, DeviceDefaultsService>();
+        builder.Services.AddSingleton<IExecutablePicker, ExecutablePicker>();
         builder.Services.AddSingleton<StartupSettingsApplier>();
 
         builder.Services.AddSingleton<MainWindow>();
