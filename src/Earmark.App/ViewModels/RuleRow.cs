@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using Earmark.App.Controls;
+
 using Earmark.Core.Audio;
 using Earmark.Core.Models;
 using Earmark.Core.Routing;
@@ -702,9 +704,9 @@ public sealed record PatternModeOption(PatternMatchMode Value, string Label)
 
     public static IReadOnlyList<PatternModeOption> For(string exactLabel) => new[]
     {
-        new PatternModeOption(PatternMatchMode.Regex, "Regex"),
-        new PatternModeOption(PatternMatchMode.Wildcard, "Wildcard"),
         new PatternModeOption(PatternMatchMode.Exact, exactLabel),
+        new PatternModeOption(PatternMatchMode.Wildcard, "Wildcard"),
+        new PatternModeOption(PatternMatchMode.Regex, "Regex"),
     };
 
     public static readonly IReadOnlyList<PatternModeOption> Device = For("Device");
@@ -840,9 +842,9 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     // Candidates for the Exact-mode pickers. Device candidates are the full display names
     // ("Friendly (Hardware)"), flow-filtered for the action; app candidates are running process
     // names; mix candidates are Wave Link mix names.
-    public IReadOnlyList<string> DeviceCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> AppCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> MixCandidates { get; private set; } = Array.Empty<string>();
+    public IReadOnlyList<PickerCandidate> DeviceCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> AppCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> MixCandidates { get; private set; } = Array.Empty<PickerCandidate>();
 
 #pragma warning disable CA1822
     public IReadOnlyList<PatternModeOption> DeviceModeOptions => PatternModeOption.Device;
@@ -1027,6 +1029,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Select(n => new PickerCandidate(n))
             .ToArray();
 
         if (IsWaveLinkAction)
@@ -1041,14 +1044,16 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
                 .Select(o => o.DeviceName)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Select(n => new PickerCandidate(n))
                 .ToArray()
-                ?? Array.Empty<string>();
+                ?? Array.Empty<PickerCandidate>();
 
             MixCandidates = waveLinkSnapshot?.Mixes
                 .Select(m => m.Name)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Select(n => new PickerCandidate(n))
                 .ToArray()
-                ?? Array.Empty<string>();
+                ?? Array.Empty<PickerCandidate>();
         }
         else
         {
@@ -1062,15 +1067,16 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
             Diagnostic = ComputeNonWaveLinkDiagnostic();
 
             // Picker candidates are full display names ("Friendly (Hardware)"), which is what Exact
-            // mode stores and matches.
+            // mode stores and matches. Disconnected devices stay listed (marked "offline") so a rule
+            // can name a device that is currently unplugged.
             DeviceCandidates = endpoints
-                .Where(e => e.State == EndpointState.Active && DeviceMatchesKind(e.Flow))
-                .Select(e => e.PickerName)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Where(e => DeviceMatchesKind(e.Flow))
+                .GroupBy(e => e.PickerName, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new PickerCandidate(g.Key, g.Any(e => e.State == EndpointState.Active) ? null : "offline"))
+                .OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            MixCandidates = Array.Empty<string>();
+            MixCandidates = Array.Empty<PickerCandidate>();
         }
 
         OnPropertyChanged(nameof(DeviceCandidates));
@@ -1392,8 +1398,8 @@ public partial class ConditionRow : ObservableObject, IDisposable, ISyncable<Rul
     [ObservableProperty]
     public partial PatternMatchMode AppMatchMode { get; set; }
 
-    public IReadOnlyList<string> DeviceCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> AppCandidates { get; private set; } = Array.Empty<string>();
+    public IReadOnlyList<PickerCandidate> DeviceCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> AppCandidates { get; private set; } = Array.Empty<PickerCandidate>();
 
 #pragma warning disable CA1822
     public IReadOnlyList<PatternModeOption> DeviceModeOptions => PatternModeOption.Device;
@@ -1542,21 +1548,26 @@ public partial class ConditionRow : ObservableObject, IDisposable, ISyncable<Rul
         }
 
         // Picker candidates: full device display names (flow-filtered) and running process names.
+        // Disconnected devices stay listed (marked "offline") so a "device missing" condition can
+        // name one that is unplugged right now. A DefaultDevice condition is the exception: only a
+        // live endpoint can hold a default role.
         DeviceCandidates = endpoints
-            .Where(e => e.State == EndpointState.Active &&
+            .Where(e =>
                 (Flow == ConditionFlow.Any
                     || (Flow == ConditionFlow.Render && e.Flow == EndpointFlow.Render)
                     || (Flow == ConditionFlow.Capture && e.Flow == EndpointFlow.Capture)) &&
-                (Kind != ConditionKind.DefaultDevice || e.IsDefault || e.IsDefaultCommunications))
-            .Select(e => e.PickerName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                (Kind != ConditionKind.DefaultDevice
+                    || (e.State == EndpointState.Active && (e.IsDefault || e.IsDefaultCommunications))))
+            .GroupBy(e => e.PickerName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new PickerCandidate(g.Key, g.Any(e => e.State == EndpointState.Active) ? null : "offline"))
+            .OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         AppCandidates = sessions
             .Select(s => s.ProcessName)
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Select(n => new PickerCandidate(n))
             .ToArray();
         OnPropertyChanged(nameof(DeviceCandidates));
         OnPropertyChanged(nameof(AppCandidates));

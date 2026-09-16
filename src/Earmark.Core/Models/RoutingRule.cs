@@ -101,13 +101,13 @@ public sealed class RuleCondition
     public string DevicePattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="DevicePattern"/> is matched.</summary>
-    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Exact;
 
     /// <summary>Process/executable pattern; required for <see cref="ConditionKind.Application"/>.</summary>
     public string AppPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="AppPattern"/> is matched.</summary>
-    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Exact;
 
     [JsonIgnore]
     public bool IsApplicationCondition => Kind == ConditionKind.Application;
@@ -155,18 +155,18 @@ public sealed class RuleAction
     public string AppPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="AppPattern"/> is matched.</summary>
-    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Exact;
 
     public string DevicePattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="DevicePattern"/> is matched.</summary>
-    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Exact;
 
     /// <summary><see cref="ActionKind.WaveLinkMix"/> only: matched against the Wave Link mix name.</summary>
     public string MixPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="MixPattern"/> is matched.</summary>
-    public PatternMatchMode MixMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode MixMatchMode { get; set; } = PatternMatchMode.Exact;
 
     /// <summary><see cref="ActionKind.DeviceVolume"/> / <see cref="ActionKind.ApplicationVolume"/> only: target volume in [0, 1].</summary>
     public float Volume { get; set; } = 0.5f;

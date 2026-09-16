@@ -19,12 +19,12 @@ public sealed partial class PickerComboBox : UserControl
 
     /// <summary>The pool of choices (device / app / mix names). Filtered live by the search box.</summary>
     public static readonly DependencyProperty CandidatesProperty = DependencyProperty.Register(
-        nameof(Candidates), typeof(IReadOnlyList<string>), typeof(PickerComboBox),
+        nameof(Candidates), typeof(IReadOnlyList<PickerCandidate>), typeof(PickerComboBox),
         new PropertyMetadata(null));
 
-    public IReadOnlyList<string> Candidates
+    public IReadOnlyList<PickerCandidate> Candidates
     {
-        get => (IReadOnlyList<string>)GetValue(CandidatesProperty);
+        get => (IReadOnlyList<PickerCandidate>)GetValue(CandidatesProperty);
         set => SetValue(CandidatesProperty, value);
     }
 
@@ -77,25 +77,30 @@ public sealed partial class PickerComboBox : UserControl
 
     private void ApplyFilter(string? text)
     {
-        var source = Candidates ?? Array.Empty<string>();
-        if (string.IsNullOrWhiteSpace(text))
+        var source = Candidates ?? Array.Empty<PickerCandidate>();
+        var search = text?.Trim() ?? string.Empty;
+
+        // `List` is the ListView's generated field name, so it shadows List<T> here - let var infer.
+        var items = search.Length == 0
+            ? source.ToList()
+            : source.Where(c => c.Value.Contains(search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+        // Nothing listed is exactly what was typed, so offer it verbatim: an app that isn't running
+        // (or a device never seen on this machine) can still be named without leaving Exact mode.
+        if (search.Length > 0 && !items.Any(c => string.Equals(c.Value, search, StringComparison.OrdinalIgnoreCase)))
         {
-            List.ItemsSource = source;
+            items.Insert(0, new PickerCandidate(search, "use as typed"));
         }
-        else
-        {
-            List.ItemsSource = source
-                .Where(c => c.Contains(text, StringComparison.OrdinalIgnoreCase))
-                .ToList();
-        }
-        List.SelectedItem = Value;
+
+        List.ItemsSource = items;
+        List.SelectedItem = items.FirstOrDefault(c => string.Equals(c.Value, Value, StringComparison.OrdinalIgnoreCase));
     }
 
     private void OnItemClick(object sender, ItemClickEventArgs e)
     {
-        if (e.ClickedItem is string name)
+        if (e.ClickedItem is PickerCandidate candidate)
         {
-            Value = name;
+            Value = candidate.Value;
             DropFlyout.Hide();
         }
     }

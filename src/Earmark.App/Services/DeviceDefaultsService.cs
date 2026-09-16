@@ -218,7 +218,10 @@ public sealed class DeviceDefaultsService : IDeviceDefaultsService
                 Actions = defaultDevices.Select(e => new RuleAction
                 {
                     Kind = ActionKind.DeviceVolume,
+                    // Modes are explicit: these seeds are hand-written patterns, and new rules now
+                    // default to Exact (pick from a list).
                     DevicePattern = $"^{Regex.Escape(e.FriendlyName)}$",
+                    DeviceMatchMode = PatternMatchMode.Regex,
                     Volume = 1f,
                 }).ToList(),
             };
@@ -238,7 +241,9 @@ public sealed class DeviceDefaultsService : IDeviceDefaultsService
                         Kind = ActionKind.ApplicationDevice,
                         Flow = EndpointFlow.Render,
                         AppPattern = AppOutputAppPattern,
+                        AppMatchMode = PatternMatchMode.Regex,
                         DevicePattern = AppOutputDevicePattern,
+                        DeviceMatchMode = PatternMatchMode.Regex,
                     },
                 },
             };

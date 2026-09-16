@@ -124,7 +124,23 @@ public class AppRuleResolverTests
     public void App_pattern_can_match_executable_path()
     {
         var discord = Session("Discord", 10, Speakers);
-        Resolve(discord, VolumeRule("v", @"\\Apps\\Discord\.exe$", 0.5f)).Volume.Should().NotBeNull();
+        var rule = new RoutingRule
+        {
+            Name = "path",
+            Enabled = true,
+            Actions =
+            {
+                new RuleAction
+                {
+                    Kind = ActionKind.ApplicationVolume,
+                    AppPattern = @"\\Apps\\Discord\.exe$",
+                    AppMatchMode = PatternMatchMode.Regex,
+                    Volume = 0.5f,
+                },
+            },
+        };
+
+        Resolve(discord, rule).Volume.Should().NotBeNull();
     }
 
     [Fact]
