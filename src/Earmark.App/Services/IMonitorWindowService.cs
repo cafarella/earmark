@@ -80,7 +80,15 @@ internal sealed class MonitorWindowService : IMonitorWindowService
         window.Closed += _closedHandler;
 
         _window = window;
+        // The cards are singletons shared with the Devices page, so a stale expansion would
+        // otherwise survive a close/reopen.
+        foreach (var card in _viewModel.VisibleCards)
+        {
+            card.IsMonitorExpanded = false;
+        }
+
         window.Activate();
+        _viewModel.ResumePeakPollingForMonitor();
         _logger.LogInformation("Audio monitor opened");
     }
 
@@ -128,6 +136,7 @@ internal sealed class MonitorWindowService : IMonitorWindowService
         _changedHandler = null;
         _closedHandler = null;
         _window = null;
+        _viewModel.PausePeakPollingForMonitor();
 
         _logger.LogInformation("Audio monitor closed");
     }
