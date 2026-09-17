@@ -71,6 +71,7 @@ internal static class HostBuilderExtensions
         builder.Services.AddSingleton<IUpdateService, UpdateService>();
         builder.Services.AddSingleton<IGlobalHotkeyService, GlobalHotkeyService>();
         builder.Services.AddSingleton<IQuickControlsService, QuickControlsService>();
+        builder.Services.AddSingleton<IMonitorWindowService, MonitorWindowService>();
         builder.Services.AddSingleton<IEndpointWriter, EndpointWriter>();
         builder.Services.AddSingleton<ISessionIconService, SessionIconService>();
         builder.Services.AddSingleton<IWaveLinkNameReconciler, WaveLinkNameReconciler>();

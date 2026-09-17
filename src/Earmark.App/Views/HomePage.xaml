@@ -170,6 +170,12 @@
                 <ToggleMenuFlyoutItem Text="Show hidden devices" IsChecked="{x:Bind ViewModel.ShowHiddenDevices, Mode=TwoWay}" />
                 <ToggleMenuFlyoutItem Text="Show disconnected devices" IsChecked="{x:Bind ViewModel.ShowDisconnectedDevices, Mode=TwoWay}" />
                 <ToggleMenuFlyoutItem Text="Lock layout" IsChecked="{x:Bind ViewModel.LockLayout, Mode=TwoWay}" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Audio monitor" Click="OnOpenMonitorClicked">
+                    <MenuFlyoutItem.Icon>
+                        <FontIcon Glyph="&#xE8A7;" />
+                    </MenuFlyoutItem.Icon>
+                </MenuFlyoutItem>
             </MenuFlyout>
         </Grid.ContextFlyout>
 
