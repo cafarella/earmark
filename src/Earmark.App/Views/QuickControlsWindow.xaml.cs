@@ -1,10 +1,10 @@
 using System.Runtime.InteropServices;
 
+using Earmark.App.Services;
 using Earmark.App.Settings;
 using Earmark.App.ViewModels;
 
 using Microsoft.Extensions.Logging;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
@@ -16,7 +16,6 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.System;
 
-using WinRT;
 using WinRT.Interop;
 
 namespace Earmark.App.Views;
@@ -235,25 +234,9 @@ public sealed partial class QuickControlsWindow : Window
         if (_appliedBackdrop == mode) return;
         _appliedBackdrop = mode;
 
-        _backdropController?.Dispose();
-        _backdropController = null;
+        _backdropController = WindowBackdrop.Apply(this, mode, _backdropConfig, _backdropController);
 
-        var target = this.As<ICompositionSupportsSystemBackdrop>();
-        ISystemBackdropControllerWithTargets? controller = mode switch
-        {
-            BackdropMode.Acrylic when DesktopAcrylicController.IsSupported() => new DesktopAcrylicController(),
-            BackdropMode.Mica when MicaController.IsSupported() => new MicaController { Kind = MicaKind.Base },
-            _ => null,
-        };
-
-        if (controller is not null)
-        {
-            controller.SetSystemBackdropConfiguration(_backdropConfig);
-            controller.AddSystemBackdropTarget(target);
-            _backdropController = controller;
-        }
-
-        SolidBackdrop.Visibility = controller is null ? Visibility.Visible : Visibility.Collapsed;
+        SolidBackdrop.Visibility = _backdropController is null ? Visibility.Visible : Visibility.Collapsed;
         UpdateBackdropTheme();
     }
 
