@@ -29,6 +29,7 @@ public partial class RulesViewModel : ObservableObject, IDisposable
 
     private bool _suppressItemEvents;
     private CancellationTokenSource? _matchCts;
+    private Guid? _pendingExpandRuleId;
 
     public RulesViewModel(
         IRulesService rules,
@@ -107,6 +108,43 @@ public partial class RulesViewModel : ObservableObject, IDisposable
             Selected = target;
         }
         PendingFocusRuleId = ruleId;
+    }
+
+    /// <summary>Expands and selects the given rule, leaving every other row as it is (unlike
+    /// <see cref="RequestFocusRule"/>, which collapses the rest). A rule created moments ago (e.g.
+    /// from the Sessions page) may not have reached <see cref="Items"/> yet, so the id is remembered
+    /// and applied as soon as the next rebuild lands.</summary>
+    public void RequestExpand(Guid ruleId)
+    {
+        var row = Items.FirstOrDefault(r => r.Id == ruleId);
+        if (row is null)
+        {
+            _pendingExpandRuleId = ruleId;
+            return;
+        }
+
+        Expand(row);
+    }
+
+    private void ApplyPendingExpand()
+    {
+        if (_pendingExpandRuleId is not Guid ruleId) return;
+
+        var row = Items.FirstOrDefault(r => r.Id == ruleId);
+        if (row is null) return;
+
+        _pendingExpandRuleId = null;
+        Expand(row);
+    }
+
+    // A rule created from the Sessions page is appended, so on a long list it would otherwise be
+    // expanded off-screen. PendingFocusRuleId is what makes the page scroll it into view; it only
+    // expands and scrolls, so the rest of the list keeps its state.
+    private void Expand(RuleRow row)
+    {
+        row.IsExpanded = true;
+        Selected = row;
+        PendingFocusRuleId = row.Id;
     }
 
     private RuleRow BuildRow(RoutingRule rule)
@@ -269,6 +307,7 @@ public partial class RulesViewModel : ObservableObject, IDisposable
                 _suppressItemEvents = false;
             }
 
+            ApplyPendingExpand();
             QueueMatchRefresh();
         });
 

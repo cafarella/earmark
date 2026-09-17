@@ -1,4 +1,4 @@
-<?xml version="1.0" encoding="utf-8" ?>
+﻿<?xml version="1.0" encoding="utf-8" ?>
 <Page
     x:Class="Earmark.App.Views.SessionsPage"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -96,6 +96,7 @@
                                         <ColumnDefinition Width="Auto" />
                                         <ColumnDefinition Width="*" />
                                         <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
                                     </Grid.ColumnDefinitions>
                                     <Ellipse Width="10" Height="10" VerticalAlignment="Center"
                                              Fill="{ThemeResource SystemFillColorSuccessBrush}"
@@ -115,6 +116,15 @@
                                                    Style="{StaticResource BodyTextBlockStyle}"
                                                    HorizontalAlignment="Right" />
                                     </StackPanel>
+
+                                    <Button Grid.Column="3"
+                                            Style="{StaticResource GhostIconButtonStyle}"
+                                            Click="OnSessionMenuClicked"
+                                            Tag="{x:Bind}"
+                                            VerticalAlignment="Center"
+                                            ToolTipService.ToolTip="Rule actions">
+                                        <FontIcon Glyph="&#xE712;" FontSize="12" />
+                                    </Button>
                                 </Grid>
                             </Border>
                         </DataTemplate>
