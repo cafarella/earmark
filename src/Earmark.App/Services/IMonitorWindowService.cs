@@ -80,7 +80,15 @@ internal sealed class MonitorWindowService : IMonitorWindowService
         window.Closed += _closedHandler;
 
         _window = window;
+        // The cards are singletons shared with the Devices page, so a stale expansion would
+        // otherwise survive a close/reopen.
+        foreach (var card in _viewModel.VisibleCards)
+        {
+            card.IsMonitorExpanded = false;
+        }
+
         window.Activate();
+        _viewModel.ResumePeakPollingForMonitor();
         _logger.LogInformation("Audio monitor opened");
     }
 
@@ -128,6 +136,7 @@ internal sealed class MonitorWindowService : IMonitorWindowService
         _changedHandler = null;
         _closedHandler = null;
         _window = null;
+        _viewModel.PausePeakPollingForMonitor();
 
         _logger.LogInformation("Audio monitor closed");
     }
@@ -156,15 +165,38 @@ internal sealed class MonitorWindowService : IMonitorWindowService
     }
 
     /// <summary>Current work areas, primary display first so an unremembered monitor centres on the
-    /// screen the user is most likely looking at.</summary>
-    private static List<WindowBounds> WorkAreas()
+    /// screen the user is most likely looking at. Empty when the displays can't be read, which the
+    /// bounds resolver treats as "keep what was saved".</summary>
+    private List<WindowBounds> WorkAreas()
     {
-        var primaryId = DisplayArea.Primary?.DisplayId.Value;
+        var areas = new List<WindowBounds>();
 
-        return DisplayArea.FindAll()
-            .OrderByDescending(d => d.DisplayId.Value == primaryId)
-            .Select(d => new WindowBounds(d.WorkArea.X, d.WorkArea.Y, d.WorkArea.Width, d.WorkArea.Height))
-            .ToList();
+        try
+        {
+            var displays = DisplayArea.FindAll();
+            var primaryId = DisplayArea.Primary?.DisplayId.Value;
+
+            // Indexed, not foreach/LINQ: the projection of this WinRT vector view throws
+            // InvalidCastException when asked for IEnumerable<DisplayArea>, so iterating it at all
+            // takes the window down. The indexer is fine, and it also gives us primary-first
+            // ordering without a sort.
+            for (var i = 0; i < displays.Count; i++)
+            {
+                var display = displays[i];
+                var bounds = new WindowBounds(
+                    display.WorkArea.X, display.WorkArea.Y, display.WorkArea.Width, display.WorkArea.Height);
+
+                if (primaryId is { } id && display.DisplayId.Value == id) areas.Insert(0, bounds);
+                else areas.Add(bounds);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Audio monitor: could not read display work areas");
+            areas.Clear();
+        }
+
+        return areas;
     }
 
     [System.Runtime.InteropServices.DllImport("user32.dll")]

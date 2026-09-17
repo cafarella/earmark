@@ -1,3 +1,5 @@
+using System.Collections.Specialized;
+
 using Earmark.App.Services;
 using Earmark.App.Settings;
 using Earmark.App.ViewModels;
@@ -37,15 +39,26 @@ public sealed partial class MonitorWindow : Window
         ApplyTheme();
         ApplyBackdrop();
 
+        RefreshDevices();
+
         Root.ActualThemeChanged += (_, _) => UpdateBackdropTheme();
         _settings.SettingsChanged += OnSettingsChanged;
+        ViewModel.Blocks.CollectionChanged += OnBlocksChanged;
         Closed += (_, _) =>
         {
             _settings.SettingsChanged -= OnSettingsChanged;
+            ViewModel.Blocks.CollectionChanged -= OnBlocksChanged;
             _backdropController?.Dispose();
             _backdropController = null;
         };
     }
+
+    // VisibleCards is a plain list with no change notification, so the device list is assigned from
+    // here rather than bound. Blocks is the observable collection the Devices page rebuilds whenever
+    // the visible set changes, which makes it the signal to re-read VisibleCards from.
+    private void OnBlocksChanged(object? sender, NotifyCollectionChangedEventArgs e) => RefreshDevices();
+
+    private void RefreshDevices() => DeviceList.ItemsSource = ViewModel.VisibleCards.ToList();
 
     public HomeViewModel ViewModel { get; }
 
