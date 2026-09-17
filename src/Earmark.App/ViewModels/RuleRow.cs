@@ -86,7 +86,12 @@ public partial class RuleRow : ObservableObject, IDisposable
     public partial bool AllActionsShadowed { get; set; }
 
     public bool IsActive => Status == RuleStatus.Active && !AllActionsShadowed;
-    public bool IsDimmed => AllActionsShadowed || Status is RuleStatus.Off or RuleStatus.ConditionsNotMet or RuleStatus.Shadowed or RuleStatus.Idle or RuleStatus.Incomplete;
+
+    /// <summary>An expanded row is the one being edited, so it stays at full strength however it
+    /// currently evaluates - a rule you are still filling in reads as incomplete, and fading the
+    /// fields while you work in them makes the editor look disabled.</summary>
+    public bool IsDimmed => !IsExpanded
+        && (AllActionsShadowed || Status is RuleStatus.Off or RuleStatus.ConditionsNotMet or RuleStatus.Shadowed or RuleStatus.Idle or RuleStatus.Incomplete);
     public double CardOpacity => IsDimmed ? 0.55 : 1.0;
     public bool HasConditions => Conditions.Count > 0;
     public bool HasActions => Actions.Count > 0;
@@ -599,6 +604,12 @@ public partial class RuleRow : ObservableObject, IDisposable
     partial void OnStatusChanged(RuleStatus value)
     {
         OnPropertyChanged(nameof(IsActive));
+        OnPropertyChanged(nameof(IsDimmed));
+        OnPropertyChanged(nameof(CardOpacity));
+    }
+
+    partial void OnIsExpandedChanged(bool value)
+    {
         OnPropertyChanged(nameof(IsDimmed));
         OnPropertyChanged(nameof(CardOpacity));
     }
