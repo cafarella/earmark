@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 
 using Earmark.App.Controls;
+using Earmark.App.Services;
 using Earmark.App.ViewModels;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -242,6 +243,9 @@ public sealed partial class HomePage : Page
             ViewModel.UngroupAll(group.Id);
         }
     }
+
+    private void OnOpenMonitorClicked(object sender, RoutedEventArgs e) =>
+        App.Current.Services.GetRequiredService<IMonitorWindowService>().Show();
 
     /// <summary>Resolves the group a flyout item targets: directly when invoked from a group header
     /// (tag = the group), or the parent group when invoked from a member card (tag = the card).</summary>

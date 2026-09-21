@@ -1,4 +1,4 @@
-using System.Collections.ObjectModel;
+﻿using System.Collections.ObjectModel;
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
@@ -759,6 +759,12 @@ public partial class DeviceCard : ObservableObject, IBlockLayoutInfo
     /// into <see cref="IsLayoutCustomSized"/>; not persisted.</summary>
     [ObservableProperty]
     public partial bool IsRulesCollapsing { get; set; }
+
+    /// <summary>Pop-out monitor only: is this device's app list revealed. Window-local in spirit -
+    /// the monitor service resets it when the window opens - but it lives here because ExpanderPill
+    /// binds view-model state.</summary>
+    [ObservableProperty]
+    public partial bool IsMonitorExpanded { get; set; }
 
     /// <summary>The first rule chip - always visible (when any rules apply at all). Sits
     /// outside the Expander so users see at-a-glance which rule is active without having

@@ -37,7 +37,7 @@ public class RuleMatcherTests
     [Fact]
     public void Device_present_matches_an_active_endpoint()
     {
-        var rule = Rule(new RuleCondition { Kind = ConditionKind.Device, DevicePattern = ".*XM6.*" });
+        var rule = Rule(new RuleCondition { Kind = ConditionKind.Device, DevicePattern = ".*XM6.*", DeviceMatchMode = PatternMatchMode.Regex });
         var endpoints = new[] { Endpoint("Sony XM6 Headphones") };
 
         _matcher.ConditionsMet(rule, endpoints, Array.Empty<AudioSession>()).Should().BeTrue();
@@ -47,7 +47,7 @@ public class RuleMatcherTests
     [Fact]
     public void Device_missing_is_the_negated_form()
     {
-        var rule = Rule(new RuleCondition { Kind = ConditionKind.Device, Negate = true, DevicePattern = ".*XM6.*" });
+        var rule = Rule(new RuleCondition { Kind = ConditionKind.Device, Negate = true, DevicePattern = ".*XM6.*", DeviceMatchMode = PatternMatchMode.Regex });
 
         _matcher.ConditionsMet(rule, new[] { Endpoint("Speakers") }, Array.Empty<AudioSession>()).Should().BeTrue();
         _matcher.ConditionsMet(rule, new[] { Endpoint("Sony XM6") }, Array.Empty<AudioSession>()).Should().BeFalse();

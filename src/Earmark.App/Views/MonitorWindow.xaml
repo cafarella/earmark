@@ -1,0 +1,129 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="Earmark.App.Views.MonitorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:controls="using:Earmark.App.Controls"
+    xmlns:vm="using:Earmark.App.ViewModels"
+    mc:Ignorable="d">
+
+    <Grid x:Name="Root">
+        <!-- Solid mode (and the unsupported-material fallback) has no system backdrop, so this
+             opaque fill sits behind the content; the backdrop otherwise shows through. -->
+        <Border x:Name="SolidBackdrop"
+                Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
+                Visibility="Collapsed" />
+
+        <!-- Items are assigned from code-behind: VisibleCards is a plain list with no change
+             notification, so the window refreshes it off the Devices page's own rebuild signal. -->
+        <ListView x:Name="DeviceList"
+                  Padding="{StaticResource SectionPadding}"
+                  SelectionMode="None"
+                  IsItemClickEnabled="False">
+            <ListView.ItemContainerStyle>
+                <!-- Strip the container's default padding and 40px minimum so the rows stay as
+                     compact as the templates below ask for. -->
+                <Style TargetType="ListViewItem">
+                    <Setter Property="Padding" Value="0" />
+                    <Setter Property="MinHeight" Value="0" />
+                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                </Style>
+            </ListView.ItemContainerStyle>
+            <ListView.ItemTemplate>
+                <DataTemplate x:DataType="vm:DeviceCard">
+                    <StackPanel Margin="0,0,0,4">
+                        <controls:ExpanderPill IsExpanded="{x:Bind IsMonitorExpanded, Mode=TwoWay}"
+                                               ChevronVisible="{x:Bind HasApps, Mode=OneWay}"
+                                               ToggleTooltip="Show apps"
+                                               ToggleOnBodyTap="True">
+                            <controls:ExpanderPill.PillContent>
+                                <Grid MinHeight="28"
+                                      Padding="8,0,4,0"
+                                      ColumnSpacing="{StaticResource SpacingSmall}">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <FontIcon Grid.Column="0"
+                                              Glyph="{x:Bind Glyph, Mode=OneWay}"
+                                              FontSize="14"
+                                              Foreground="{ThemeResource AccentTextFillColorPrimaryBrush}"
+                                              VerticalAlignment="Center" />
+
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind DisplayName, Mode=OneWay}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               TextTrimming="CharacterEllipsis"
+                                               TextWrapping="NoWrap"
+                                               VerticalAlignment="Center" />
+
+                                    <controls:ChannelPeakMeter Grid.Column="2"
+                                                               Width="90"
+                                                               VerticalAlignment="Center"
+                                                               ChannelCount="{x:Bind ChannelCount, Mode=OneWay}"
+                                                               ColourMode="{x:Bind MeterOptions.ColourMode, Mode=OneWay}"
+                                                               SingleColour="{x:Bind MeterOptions.SingleColour, Mode=OneWay}"
+                                                               ChannelMode="{x:Bind MeterOptions.ChannelMode, Mode=OneWay}"
+                                                               ShowHold="{x:Bind MeterOptions.ShowHold, Mode=OneWay}"
+                                                               LeftLevel="{x:Bind LeftLevel, Mode=OneWay}"
+                                                               RightLevel="{x:Bind RightLevel, Mode=OneWay}"
+                                                               CentreLfeLevel="{x:Bind CentreLfeLevel, Mode=OneWay}" />
+                                </Grid>
+                            </controls:ExpanderPill.PillContent>
+                        </controls:ExpanderPill>
+
+                        <!-- Apps playing through this device. Indented under the pill; no controls,
+                             this window only watches. Visibility takes no converter: x:Bind maps bool
+                             to Visibility itself, and a converter would make the generator ask this
+                             Window for a converter lookup root, which only a FrameworkElement can be. -->
+                        <ItemsControl ItemsSource="{x:Bind Apps}"
+                                      Margin="20,2,0,0"
+                                      HorizontalAlignment="Stretch"
+                                      HorizontalContentAlignment="Stretch"
+                                      Visibility="{x:Bind IsMonitorExpanded, Mode=OneWay}">
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="HorizontalAlignment" Value="Stretch" />
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="vm:AppChip">
+                                    <Grid MinHeight="22"
+                                          Padding="8,0,4,0"
+                                          ColumnSpacing="{StaticResource SpacingSmall}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <TextBlock Grid.Column="0"
+                                                   Text="{x:Bind DisplayLabel, Mode=OneWay}"
+                                                   Style="{StaticResource CaptionTextBlockStyle}"
+                                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   TextWrapping="NoWrap"
+                                                   VerticalAlignment="Center" />
+
+                                        <controls:ChannelPeakMeter Grid.Column="1"
+                                                                   Width="90"
+                                                                   VerticalAlignment="Center"
+                                                                   ChannelCount="1"
+                                                                   BarHeightOverride="3"
+                                                                   ShowHold="False"
+                                                                   Volume="1.0"
+                                                                   LeftLevel="{x:Bind PeakLevelScalar, Mode=OneWay}" />
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </DataTemplate>
+            </ListView.ItemTemplate>
+        </ListView>
+    </Grid>
+</Window>

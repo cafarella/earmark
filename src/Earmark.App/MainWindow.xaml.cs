@@ -3,7 +3,6 @@ using Earmark.App.Settings;
 using Earmark.App.Views;
 
 using Microsoft.UI;
-using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -12,8 +11,6 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
 
 using Windows.UI;
-
-using WinRT;
 
 namespace Earmark.App;
 
@@ -365,27 +362,13 @@ public sealed partial class MainWindow : Window, IDisposable
         }
         _appliedBackdrop = mode;
 
-        _backdropController?.Dispose();
-        _backdropController = null;
-
-        var target = this.As<ICompositionSupportsSystemBackdrop>();
-        ISystemBackdropControllerWithTargets? controller = mode switch
-        {
-            BackdropMode.Acrylic when DesktopAcrylicController.IsSupported() => new DesktopAcrylicController(),
-            BackdropMode.Mica when MicaController.IsSupported() => new MicaController { Kind = MicaKind.Base },
-            _ => null,
-        };
-
-        if (controller is not null)
-        {
-            controller.SetSystemBackdropConfiguration(_backdropConfig);
-            controller.AddSystemBackdropTarget(target);
-            _backdropController = controller;
-        }
+        _backdropController = _backdropConfig is null
+            ? null
+            : WindowBackdrop.Apply(this, mode, _backdropConfig, _backdropController);
 
         // Solid mode (and the unsupported-material fallback) has no system backdrop, so paint the
         // opaque themed fill behind the content; otherwise let the backdrop show through.
-        SolidBackdrop.Visibility = controller is null ? Visibility.Visible : Visibility.Collapsed;
+        SolidBackdrop.Visibility = _backdropController is null ? Visibility.Visible : Visibility.Collapsed;
 
         // A freshly created controller starts at the OS theme; push the app's resolved theme now.
         UpdateThemeChrome();

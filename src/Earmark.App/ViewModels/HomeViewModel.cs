@@ -121,6 +121,7 @@ public partial class HomeViewModel : ObservableObject, IDisposable
     private DispatcherTimer? _peakTimer;
     private bool _homePageVisible = true;
     private bool _quickControlsVisible;
+    private bool _monitorVisible;
     private bool _quickControlProjectionQueued;
 
     public HomeViewModel(
@@ -444,9 +445,23 @@ public partial class HomeViewModel : ObservableObject, IDisposable
         UpdatePeakPollingState();
     }
 
+    /// <summary>The pop-out monitor is open: keep metering even when the Devices page is off-screen
+    /// and the main window is hidden to tray.</summary>
+    public void ResumePeakPollingForMonitor()
+    {
+        _monitorVisible = true;
+        UpdatePeakPollingState();
+    }
+
+    public void PausePeakPollingForMonitor()
+    {
+        _monitorVisible = false;
+        UpdatePeakPollingState();
+    }
+
     private void UpdatePeakPollingState()
     {
-        if (_homePageVisible || _quickControlsVisible) _peakTimer?.Start();
+        if (_homePageVisible || _quickControlsVisible || _monitorVisible) _peakTimer?.Start();
         else _peakTimer?.Stop();
     }
 

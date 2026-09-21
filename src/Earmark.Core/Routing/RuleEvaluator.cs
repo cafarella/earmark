@@ -127,6 +127,17 @@ public sealed class RuleEvaluator : IRuleEvaluator
                     anyShadowed = true;
                 }
             }
+            else if (action.IsAppVolumeAction || action.IsAppMuteAction)
+            {
+                if (sessions.Any(s => AppRuleResolver.TargetsSession(action, s, endpoints)))
+                {
+                    anyActiveTarget = true;
+                }
+                else
+                {
+                    anyIdle = true;
+                }
+            }
             else
             {
                 // SetDeviceVolume / MuteDevice / UnmuteDevice are flow-agnostic - they target a

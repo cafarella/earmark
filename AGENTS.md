@@ -87,6 +87,8 @@ A `RoutingRule` has a name, enabled bit, list of AND-ed **conditions**, and two 
 | `WaveLinkMix` | `Membership` (Include/Exclude/Exclusive) | `MixPattern`, `DevicePattern` | Add/remove device to a Wave Link mix; Exclusive strips non-matching outputs |
 | `DeviceVolume` | - | `DevicePattern`, `Volume` 0-1 | Pin a device's volume |
 | `DeviceMute` | `Muted` | `DevicePattern` | Set mute state |
+| `ApplicationVolume` | - | `AppPattern`, `Volume` 0-1 | Pin matching apps' session volume; optional `DevicePattern` limits it to sessions on those devices (blank = all) |
+| `ApplicationMute` | `Muted` | `AppPattern` | Set matching apps' session mute state; optional `DevicePattern` as above |
 | `RenameDevice` | - | `DevicePattern`, `NewName` | Parked: needs elevated registry write, hidden from picker |
 
 Every action carries **`Pinned`** (default true). A **pinned** action is continuously reconciled (external drift is reverted). A **one-shot** (`Pinned=false`) fires only on its rule's *activation edge* (conditions flip, edit, or startup), then is left alone. `RoutingApplier.ComputeActivationEdges` compares current `ConditionsMet` against the previous cycle; an apply pass enacts when `Pinned || edge`. Reconcile passes carry no edges (pinned only). `DeviceRuleResolver` returns `Pinned`, so a one-shot never locks a slider.

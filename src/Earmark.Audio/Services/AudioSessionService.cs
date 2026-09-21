@@ -43,6 +43,7 @@ public sealed class AudioSessionService : IAudioSessionService, IDisposable
     public event EventHandler<AudioSessionEvent>? SessionAdded;
     public event EventHandler<AudioSessionRemovedEvent>? SessionRemoved;
     public event EventHandler? SessionsChanged;
+    public event EventHandler? ExternalSessionVolumeChanged;
 
     public IReadOnlyList<AudioSession> GetSessions()
     {
@@ -242,6 +243,104 @@ public sealed class AudioSessionService : IAudioSessionService, IDisposable
         SessionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    internal void RaiseSessionVolumeChanged()
+    {
+        if (_disposed) return;
+        try
+        {
+            ExternalSessionVolumeChanged?.Invoke(this, EventArgs.Empty);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "ExternalSessionVolumeChanged subscriber threw");
+        }
+    }
+
+    public bool SetVolume(AudioSession session, float level)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        var clamped = Math.Clamp(level, 0f, 1f);
+        return WithSessionVolume(session, volume =>
+        {
+            var current = volume.Volume;
+            if (Math.Abs(current - clamped) < 0.005f)
+            {
+                _logger.LogDebug("SetSessionVolume({Process} pid {Pid}) skipped: already at {Level:F2}",
+                    session.ProcessName, session.ProcessId, current);
+                return false;
+            }
+            volume.Volume = clamped;
+            _logger.LogInformation("SetSessionVolume({Process} pid {Pid}) {Old:F2} -> {New:F2}",
+                session.ProcessName, session.ProcessId, current, clamped);
+            return true;
+        });
+    }
+
+    public bool SetMuted(AudioSession session, bool muted)
+    {
+        ArgumentNullException.ThrowIfNull(session);
+        return WithSessionVolume(session, volume =>
+        {
+            if (volume.Mute == muted)
+            {
+                _logger.LogDebug("SetSessionMuted({Process} pid {Pid}) skipped: already {State}",
+                    session.ProcessName, session.ProcessId, muted ? "muted" : "unmuted");
+                return false;
+            }
+            volume.Mute = muted;
+            _logger.LogInformation("SetSessionMuted({Process} pid {Pid}) -> {State}",
+                session.ProcessName, session.ProcessId, muted ? "muted" : "unmuted");
+            return true;
+        });
+    }
+
+    // Opens its own device rather than borrowing a SessionWatcher's, so a concurrent AttachAll
+    // (which disposes every watcher) can't pull the device out from under the write.
+    private bool WithSessionVolume(AudioSession session, Func<SimpleAudioVolume, bool> write)
+    {
+        if (_disposed || string.IsNullOrEmpty(session.CurrentEndpointId))
+        {
+            return false;
+        }
+
+        MMDevice? device = null;
+        try
+        {
+            device = _enumerator.GetDevice(session.CurrentEndpointId);
+            var manager = device.AudioSessionManager;
+            manager.RefreshSessions();
+            var controls = manager.Sessions;
+            for (var i = 0; i < controls.Count; i++)
+            {
+                var control = controls[i];
+                try
+                {
+                    if (string.Equals(control.GetSessionInstanceIdentifier, session.SessionInstanceId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return write(control.SimpleAudioVolume);
+                    }
+                }
+                finally
+                {
+                    control.Dispose();
+                }
+            }
+
+            _logger.LogDebug("Session for {Process} (pid {Pid}) not found on {Endpoint}",
+                session.ProcessName, session.ProcessId, session.CurrentEndpointId);
+            return false;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Session volume write failed for {Process} (pid {Pid})", session.ProcessName, session.ProcessId);
+            return false;
+        }
+        finally
+        {
+            device?.Dispose();
+        }
+    }
+
     internal bool TryMap(AudioSessionControl session, string endpointId, out AudioSession mapped)
     {
         mapped = null!;
@@ -437,9 +536,10 @@ public sealed class AudioSessionService : IAudioSessionService, IDisposable
             }
         }
 
-        // Volume / icon / display-name fire frequently and don't change routing-relevant
-        // state. Ignoring them keeps the snapshot stable and avoids waking the UI/applier.
-        public void OnVolumeChanged(float volume, bool isMuted) { }
+        // Icon / display-name fire frequently and don't change routing-relevant state, so they're
+        // ignored. Volume changes only raise ExternalSessionVolumeChanged (no snapshot rebuild, no
+        // SessionsChanged), which lets pinned app volume rules snap back without waking the UI.
+        public void OnVolumeChanged(float volume, bool isMuted) => _owner.RaiseSessionVolumeChanged();
         public void OnDisplayNameChanged(string displayName) { }
         public void OnIconPathChanged(string iconPath) { }
         public void OnChannelVolumeChanged(uint channelCount, IntPtr newVolumes, uint channelIndex) { }

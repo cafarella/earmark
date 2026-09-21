@@ -31,6 +31,23 @@ public class RuleShadowAnalyzerTests
         Actions = { new RuleAction { Kind = ActionKind.DeviceVolume, DevicePattern = device, Volume = 1f } },
     };
 
+    private static AudioSession SessOn(string proc, uint pid, string device) =>
+        new($"i{pid}", $"s{pid}", pid, proc, $@"C:\{proc}.exe", proc, "", $"id:{device}", SessionState.Active, false);
+
+    private static RoutingRule AppVolRule(string name, string app, string device = "") => new()
+    {
+        Name = name,
+        Enabled = true,
+        Actions = { new RuleAction { Kind = ActionKind.ApplicationVolume, AppPattern = app, DevicePattern = device, Volume = 0.5f } },
+    };
+
+    private static RoutingRule AppMuteRule(string name, string app) => new()
+    {
+        Name = name,
+        Enabled = true,
+        Actions = { new RuleAction { Kind = ActionKind.ApplicationMute, AppPattern = app, Muted = true } },
+    };
+
     private HashSet<int> Shadow(RoutingRule target, IReadOnlyList<RoutingRule> all, IReadOnlyList<AudioEndpoint> eps, IReadOnlyList<AudioSession> sess) =>
         RuleShadowAnalyzer.ShadowedActiveActions(target, _matcher.ConditionsMet(target, eps, sess), all, eps, sess, _matcher);
 
@@ -125,5 +142,54 @@ public class RuleShadowAnalyzerTests
         var eps = new[] { Ep("Speakers") };
 
         Shadow(mute, all, eps, Array.Empty<AudioSession>()).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Later_app_volume_rule_on_same_app_is_shadowed()
+    {
+        var first = AppVolRule("first", "Discord");
+        var second = AppVolRule("second", "Discord");
+        var all = new[] { first, second };
+        var eps = new[] { Ep("Speakers") };
+        var sess = new[] { SessOn("Discord", 100, "Speakers") };
+
+        Shadow(first, all, eps, sess).Should().BeEmpty();
+        Shadow(second, all, eps, sess).Should().Contain(0);
+    }
+
+    [Fact]
+    public void App_volume_rules_for_different_apps_do_not_shadow()
+    {
+        var a = AppVolRule("a", "Discord");
+        var b = AppVolRule("b", "Spotify");
+        var all = new[] { a, b };
+        var eps = new[] { Ep("Speakers") };
+        var sess = new[] { SessOn("Discord", 100, "Speakers"), SessOn("Spotify", 200, "Speakers") };
+
+        Shadow(b, all, eps, sess).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void App_volume_and_app_mute_are_independent_dimensions()
+    {
+        var vol = AppVolRule("vol", "Discord");
+        var mute = AppMuteRule("mute", "Discord");
+        var all = new[] { vol, mute };
+        var eps = new[] { Ep("Speakers") };
+        var sess = new[] { SessOn("Discord", 100, "Speakers") };
+
+        Shadow(mute, all, eps, sess).Should().BeEmpty();
+    }
+
+    [Fact]
+    public void Device_filtered_app_volume_only_claims_sessions_on_that_device()
+    {
+        var speakersOnly = AppVolRule("speakers", "Discord", device: "Speakers");
+        var anyDevice = AppVolRule("any", "Discord");
+        var all = new[] { speakersOnly, anyDevice };
+        var eps = new[] { Ep("Speakers"), Ep("Headphones") };
+        var sess = new[] { SessOn("Discord", 100, "Headphones") };
+
+        Shadow(anyDevice, all, eps, sess).Should().BeEmpty();
     }
 }

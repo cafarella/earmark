@@ -109,6 +109,7 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
         _endpoints.DefaultsChanged += OnDefaultsChanged;
         _endpoints.ExternalVolumeChanged += OnExternalVolumeChanged;
         _endpoints.ExternalMuteChanged += OnExternalMuteChanged;
+        _sessions.ExternalSessionVolumeChanged += OnExternalSessionVolumeChanged;
         _waveLink.SnapshotChanged += OnWaveLinkSnapshotChanged;
 
         _ = Task.Run(async () =>
@@ -180,6 +181,7 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
                 ApplyDefaultDevices(edges);
                 ApplyApplicationsToSessions(edges);
                 ApplyVolumeAndMuteRules(edges);
+                ApplyAppVolumeAndMuteRules(edges);
             }).ConfigureAwait(false);
 
             var ct = _cts?.Token ?? CancellationToken.None;
@@ -250,6 +252,7 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
         // A newly-added session is itself an activation: its one-shot app routes fire once here.
         ApplyAppForFlow(session, EndpointFlow.Render, renderEndpoints, sessions, NoEdges, forceActivation: true);
         ApplyAppForFlow(session, EndpointFlow.Capture, captureEndpoints, sessions, NoEdges, forceActivation: true);
+        ApplyAppVolumeAndMuteRules(NoEdges, new[] { session }, forceActivation: true);
         return Task.FromResult<AppliedRoute?>(null);
     }
 
@@ -530,6 +533,9 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
     private void OnExternalMuteChanged(object? sender, EndpointMuteChangedEventArgs e) =>
         ScheduleVolumeReconcile();
 
+    private void OnExternalSessionVolumeChanged(object? sender, EventArgs e) =>
+        ScheduleVolumeReconcile();
+
     // Re-assert volume/mute-lock rules after an external change, event-driven like the Devices
     // page. Debounced through the single reconcile timer so a slider drag coalesces into one
     // re-clamp once the user lets go. Skipped when no rule PINS volume/mute (one-shot rules don't
@@ -553,7 +559,8 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
             // actions reconcile, so a one-shot-only rule must not arm the timer.
             foreach (var action in rule.Actions.Concat(rule.ElseActions))
             {
-                if (action.IsValid && action.Pinned && (action.IsVolumeAction || action.IsMuteAction)) return true;
+                if (action.IsValid && action.Pinned
+                    && (action.IsVolumeAction || action.IsMuteAction || action.IsAppVolumeAction || action.IsAppMuteAction)) return true;
             }
         }
         return false;
@@ -568,7 +575,11 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
             try
             {
                 // A reconcile is not an activation edge: enforce pinned volume/mute only.
-                await Task.Run(() => ApplyVolumeAndMuteRules(NoEdges)).ConfigureAwait(false);
+                await Task.Run(() =>
+                {
+                    ApplyVolumeAndMuteRules(NoEdges);
+                    ApplyAppVolumeAndMuteRules(NoEdges);
+                }).ConfigureAwait(false);
             }
             finally
             {
@@ -665,6 +676,74 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
                     catch (Exception ex)
                     {
                         _logger.LogDebug(ex, "Mute rule '{Rule}' write failed for {Device}", capturedRule, capturedDevice);
+                    }
+                });
+            }
+        }
+    }
+
+    private void ApplyAppVolumeAndMuteRules(IReadOnlySet<Guid> edges, IReadOnlyList<AudioSession>? only = null, bool forceActivation = false)
+    {
+        // Per-session first-match-wins via AppRuleResolver, the same logic the Rules page uses for
+        // status and shadowing. No dedupe set: SetVolume/SetMuted read before writing, so a pinned
+        // target that's already in place costs a read, not an audio write.
+        var endpoints = _endpoints.GetEndpoints(EndpointFlow.Render)
+            .Concat(_endpoints.GetEndpoints(EndpointFlow.Capture))
+            .Where(e => e.State == EndpointState.Active)
+            .ToList();
+        if (endpoints.Count == 0)
+        {
+            return;
+        }
+
+        var sessions = _sessions.GetSessions();
+
+        foreach (var session in only ?? sessions)
+        {
+            var targets = AppRuleResolver.Resolve(session, _rules.Rules, endpoints, sessions, _matcher);
+            var device = endpoints.FirstOrDefault(e => string.Equals(e.Id, session.CurrentEndpointId, StringComparison.OrdinalIgnoreCase))?.DisplayName
+                ?? session.CurrentEndpointId;
+
+            if (targets.Volume is { } v && (forceActivation || ShouldEnact(v.Pinned, v.SourceRuleId, edges)))
+            {
+                var capturedSession = session;
+                var capturedVolume = v.Value;
+                var capturedRule = v.SourceName;
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        if (_sessions.SetVolume(capturedSession, capturedVolume))
+                        {
+                            _logger.LogInformation("Applied app volume rule '{Rule}': {Process} (pid {Pid}) on '{Device}' -> {Volume:F2}",
+                                capturedRule, capturedSession.ProcessName, capturedSession.ProcessId, device, capturedVolume);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "App volume rule '{Rule}' write failed for {Process}", capturedRule, capturedSession.ProcessName);
+                    }
+                });
+            }
+
+            if (targets.Muted is { } m && (forceActivation || ShouldEnact(m.Pinned, m.SourceRuleId, edges)))
+            {
+                var capturedSession = session;
+                var capturedMute = m.Value;
+                var capturedRule = m.SourceName;
+                _ = Task.Run(() =>
+                {
+                    try
+                    {
+                        if (_sessions.SetMuted(capturedSession, capturedMute))
+                        {
+                            _logger.LogInformation("Applied app {Verb} rule '{Rule}': {Process} (pid {Pid}) on '{Device}'",
+                                capturedMute ? "mute" : "unmute", capturedRule, capturedSession.ProcessName, capturedSession.ProcessId, device);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "App mute rule '{Rule}' write failed for {Process}", capturedRule, capturedSession.ProcessName);
                     }
                 });
             }
@@ -857,6 +936,7 @@ internal sealed class RoutingApplier : IRoutingApplier, IDisposable
         _endpoints.DefaultsChanged -= OnDefaultsChanged;
         _endpoints.ExternalVolumeChanged -= OnExternalVolumeChanged;
         _endpoints.ExternalMuteChanged -= OnExternalMuteChanged;
+        _sessions.ExternalSessionVolumeChanged -= OnExternalSessionVolumeChanged;
         _waveLink.SnapshotChanged -= OnWaveLinkSnapshotChanged;
         _cts?.Dispose();
         _cts = null;

@@ -5,6 +5,8 @@ using System.Text.RegularExpressions;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 
+using Earmark.App.Controls;
+
 using Earmark.Core.Audio;
 using Earmark.Core.Models;
 using Earmark.Core.Routing;
@@ -84,7 +86,12 @@ public partial class RuleRow : ObservableObject, IDisposable
     public partial bool AllActionsShadowed { get; set; }
 
     public bool IsActive => Status == RuleStatus.Active && !AllActionsShadowed;
-    public bool IsDimmed => AllActionsShadowed || Status is RuleStatus.Off or RuleStatus.ConditionsNotMet or RuleStatus.Shadowed or RuleStatus.Idle or RuleStatus.Incomplete;
+
+    /// <summary>An expanded row is the one being edited, so it stays at full strength however it
+    /// currently evaluates - a rule you are still filling in reads as incomplete, and fading the
+    /// fields while you work in them makes the editor look disabled.</summary>
+    public bool IsDimmed => !IsExpanded
+        && (AllActionsShadowed || Status is RuleStatus.Off or RuleStatus.ConditionsNotMet or RuleStatus.Shadowed or RuleStatus.Idle or RuleStatus.Incomplete);
     public double CardOpacity => IsDimmed ? 0.55 : 1.0;
     public bool HasConditions => Conditions.Count > 0;
     public bool HasActions => Actions.Count > 0;
@@ -601,6 +608,12 @@ public partial class RuleRow : ObservableObject, IDisposable
         OnPropertyChanged(nameof(CardOpacity));
     }
 
+    partial void OnIsExpandedChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsDimmed));
+        OnPropertyChanged(nameof(CardOpacity));
+    }
+
     partial void OnAllActionsShadowedChanged(bool value)
     {
         OnPropertyChanged(nameof(IsActive));
@@ -702,9 +715,9 @@ public sealed record PatternModeOption(PatternMatchMode Value, string Label)
 
     public static IReadOnlyList<PatternModeOption> For(string exactLabel) => new[]
     {
-        new PatternModeOption(PatternMatchMode.Regex, "Regex"),
-        new PatternModeOption(PatternMatchMode.Wildcard, "Wildcard"),
         new PatternModeOption(PatternMatchMode.Exact, exactLabel),
+        new PatternModeOption(PatternMatchMode.Wildcard, "Wildcard"),
+        new PatternModeOption(PatternMatchMode.Regex, "Regex"),
     };
 
     public static readonly IReadOnlyList<PatternModeOption> Device = For("Device");
@@ -731,6 +744,8 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         new ActionKindOption(ActionKind.WaveLinkMix, "Wave Link mix"),
         new ActionKindOption(ActionKind.DeviceVolume, "Set device volume"),
         new ActionKindOption(ActionKind.DeviceMute, "Mute device"),
+        new ActionKindOption(ActionKind.ApplicationVolume, "Set app volume"),
+        new ActionKindOption(ActionKind.ApplicationMute, "Mute app"),
         // RenameDevice is parked: it needs an elevated HKLM write (IPropertyStore is blocked even
         // when elevated) and can't ship to the Store, so it's hidden from the picker. The enum,
         // NewName field, and dormant ActionRow/XAML bits stay so existing rules still load and
@@ -838,9 +853,9 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     // Candidates for the Exact-mode pickers. Device candidates are the full display names
     // ("Friendly (Hardware)"), flow-filtered for the action; app candidates are running process
     // names; mix candidates are Wave Link mix names.
-    public IReadOnlyList<string> DeviceCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> AppCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> MixCandidates { get; private set; } = Array.Empty<string>();
+    public IReadOnlyList<PickerCandidate> DeviceCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> AppCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> MixCandidates { get; private set; } = Array.Empty<PickerCandidate>();
 
 #pragma warning disable CA1822
     public IReadOnlyList<PatternModeOption> DeviceModeOptions => PatternModeOption.Device;
@@ -874,16 +889,21 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     public bool MixPatternIsPick => MixMatchMode == PatternMatchMode.Exact;
     public bool MixPatternIsText => !MixPatternIsPick;
 
-    public bool RequiresAppPattern => Kind == ActionKind.ApplicationDevice;
+    public bool RequiresAppPattern => Kind is ActionKind.ApplicationDevice or ActionKind.ApplicationVolume or ActionKind.ApplicationMute;
     public bool IsDefaultAction => Kind == ActionKind.DefaultDevice;
     public bool IsWaveLinkAction => Kind == ActionKind.WaveLinkMix;
-    public bool RequiresVolumeSlider => Kind == ActionKind.DeviceVolume;
+    public bool RequiresVolumeSlider => Kind is ActionKind.DeviceVolume or ActionKind.ApplicationVolume;
     public bool RequiresNewName => Kind == ActionKind.RenameDevice;
     public bool RequiresDevicePattern => Kind is not ActionKind.RenameDevice; // every live kind needs one
 
     /// <summary>The Output/Input direction toggle applies to app + default-device actions.</summary>
     public bool ShowDirection => Kind is ActionKind.ApplicationDevice or ActionKind.DefaultDevice;
-    public bool ShowMuteToggle => Kind == ActionKind.DeviceMute;
+    public bool ShowMuteToggle => Kind is ActionKind.DeviceMute or ActionKind.ApplicationMute;
+
+    /// <summary>App volume / mute actions treat a blank device pattern as "every device".</summary>
+    public string DevicePatternPlaceholder => Kind is ActionKind.ApplicationVolume or ActionKind.ApplicationMute
+        ? "All devices"
+        : ".*Headphones.*";
     public bool ShowMembership => Kind == ActionKind.WaveLinkMix;
 
     /// <summary>Two-way bridge for the Output/Input ToggleSwitch (on = Input/Capture).</summary>
@@ -917,6 +937,8 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         ActionKind.DeviceVolume => "Set volume",
         ActionKind.DeviceMute => Muted ? "Mute" : "Unmute",
         ActionKind.RenameDevice => "Rename",
+        ActionKind.ApplicationVolume => "App volume",
+        ActionKind.ApplicationMute => Muted ? "Mute app" : "Unmute app",
         _ => Kind.ToString(),
     };
 
@@ -1018,6 +1040,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Select(n => new PickerCandidate(n))
             .ToArray();
 
         if (IsWaveLinkAction)
@@ -1032,14 +1055,16 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
                 .Select(o => o.DeviceName)
                 .Distinct(StringComparer.OrdinalIgnoreCase)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Select(n => new PickerCandidate(n))
                 .ToArray()
-                ?? Array.Empty<string>();
+                ?? Array.Empty<PickerCandidate>();
 
             MixCandidates = waveLinkSnapshot?.Mixes
                 .Select(m => m.Name)
                 .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Select(n => new PickerCandidate(n))
                 .ToArray()
-                ?? Array.Empty<string>();
+                ?? Array.Empty<PickerCandidate>();
         }
         else
         {
@@ -1053,15 +1078,16 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
             Diagnostic = ComputeNonWaveLinkDiagnostic();
 
             // Picker candidates are full display names ("Friendly (Hardware)"), which is what Exact
-            // mode stores and matches.
+            // mode stores and matches. Disconnected devices stay listed (marked "offline") so a rule
+            // can name a device that is currently unplugged.
             DeviceCandidates = endpoints
-                .Where(e => e.State == EndpointState.Active && DeviceMatchesKind(e.Flow))
-                .Select(e => e.PickerName)
-                .Distinct(StringComparer.OrdinalIgnoreCase)
-                .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                .Where(e => DeviceMatchesKind(e.Flow))
+                .GroupBy(e => e.PickerName, StringComparer.OrdinalIgnoreCase)
+                .Select(g => new PickerCandidate(g.Key, g.Any(e => e.State == EndpointState.Active) ? null : "offline"))
+                .OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
 
-            MixCandidates = Array.Empty<string>();
+            MixCandidates = Array.Empty<PickerCandidate>();
         }
 
         OnPropertyChanged(nameof(DeviceCandidates));
@@ -1090,6 +1116,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
     {
         ActionKind.ApplicationDevice or ActionKind.DefaultDevice => Flow,
         ActionKind.DeviceVolume or ActionKind.DeviceMute or ActionKind.RenameDevice => null,
+        ActionKind.ApplicationVolume or ActionKind.ApplicationMute => EndpointFlow.Render,
         _ => EndpointFlow.Render,
     };
 
@@ -1233,6 +1260,7 @@ public partial class ActionRow : ObservableObject, IDisposable, ISyncable<RuleAc
         OnPropertyChanged(nameof(RequiresVolumeSlider));
         OnPropertyChanged(nameof(RequiresNewName));
         OnPropertyChanged(nameof(RequiresDevicePattern));
+        OnPropertyChanged(nameof(DevicePatternPlaceholder));
         OnPropertyChanged(nameof(ShowDirection));
         OnPropertyChanged(nameof(ShowMuteToggle));
         OnPropertyChanged(nameof(ShowMembership));
@@ -1381,8 +1409,8 @@ public partial class ConditionRow : ObservableObject, IDisposable, ISyncable<Rul
     [ObservableProperty]
     public partial PatternMatchMode AppMatchMode { get; set; }
 
-    public IReadOnlyList<string> DeviceCandidates { get; private set; } = Array.Empty<string>();
-    public IReadOnlyList<string> AppCandidates { get; private set; } = Array.Empty<string>();
+    public IReadOnlyList<PickerCandidate> DeviceCandidates { get; private set; } = Array.Empty<PickerCandidate>();
+    public IReadOnlyList<PickerCandidate> AppCandidates { get; private set; } = Array.Empty<PickerCandidate>();
 
 #pragma warning disable CA1822
     public IReadOnlyList<PatternModeOption> DeviceModeOptions => PatternModeOption.Device;
@@ -1531,21 +1559,26 @@ public partial class ConditionRow : ObservableObject, IDisposable, ISyncable<Rul
         }
 
         // Picker candidates: full device display names (flow-filtered) and running process names.
+        // Disconnected devices stay listed (marked "offline") so a "device missing" condition can
+        // name one that is unplugged right now. A DefaultDevice condition is the exception: only a
+        // live endpoint can hold a default role.
         DeviceCandidates = endpoints
-            .Where(e => e.State == EndpointState.Active &&
+            .Where(e =>
                 (Flow == ConditionFlow.Any
                     || (Flow == ConditionFlow.Render && e.Flow == EndpointFlow.Render)
                     || (Flow == ConditionFlow.Capture && e.Flow == EndpointFlow.Capture)) &&
-                (Kind != ConditionKind.DefaultDevice || e.IsDefault || e.IsDefaultCommunications))
-            .Select(e => e.PickerName)
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+                (Kind != ConditionKind.DefaultDevice
+                    || (e.State == EndpointState.Active && (e.IsDefault || e.IsDefaultCommunications))))
+            .GroupBy(e => e.PickerName, StringComparer.OrdinalIgnoreCase)
+            .Select(g => new PickerCandidate(g.Key, g.Any(e => e.State == EndpointState.Active) ? null : "offline"))
+            .OrderBy(c => c.Value, StringComparer.OrdinalIgnoreCase)
             .ToArray();
         AppCandidates = sessions
             .Select(s => s.ProcessName)
             .Where(n => !string.IsNullOrEmpty(n))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(n => n, StringComparer.OrdinalIgnoreCase)
+            .Select(n => new PickerCandidate(n))
             .ToArray();
         OnPropertyChanged(nameof(DeviceCandidates));
         OnPropertyChanged(nameof(AppCandidates));

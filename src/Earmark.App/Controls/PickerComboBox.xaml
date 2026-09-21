@@ -5,6 +5,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:Earmark.App.Controls"
     mc:Ignorable="d">
 
     <!-- Read-only dropdown: the closed button shows the chosen value (or placeholder); the
@@ -42,7 +43,28 @@
                               MaxHeight="280"
                               SelectionMode="Single"
                               IsItemClickEnabled="True"
-                              ItemClick="OnItemClick" />
+                              ItemClick="OnItemClick">
+                        <ListView.ItemTemplate>
+                            <DataTemplate x:DataType="local:PickerCandidate">
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Grid.Column="0"
+                                               Text="{x:Bind Value}"
+                                               TextTrimming="CharacterEllipsis"
+                                               VerticalAlignment="Center" />
+                                    <TextBlock Grid.Column="1"
+                                               Text="{x:Bind Note}"
+                                               Visibility="{x:Bind HasNote}"
+                                               Style="{StaticResource CaptionTextBlockStyle}"
+                                               Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+                                               VerticalAlignment="Center" />
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
                 </Grid>
             </Flyout>
         </DropDownButton.Flyout>

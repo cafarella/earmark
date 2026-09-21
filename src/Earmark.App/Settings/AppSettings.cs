@@ -253,6 +253,11 @@ public sealed class AppSettings
     /// <summary>Whether the navigation pane is expanded. Persisted so the collapse/expand state of the
     /// left sidebar survives a relaunch. Default true (expanded), matching the WinUI default.</summary>
     public bool NavigationPaneOpen { get; set; } = true;
+
+    /// <summary>Last position and size of the pop-out audio monitor. Null until it is first opened.
+    /// The main window deliberately does not persist its size; the monitor does, because a window you
+    /// park on a second screen is useless if it forgets where it lives.</summary>
+    public WindowBounds? MonitorBounds { get; set; }
 }
 
 /// <summary>

@@ -67,6 +67,10 @@ public enum ActionKind
     DeviceMute,
     /// <summary>Rename a device. Parked: needs an elevated registry write, so it's hidden from the picker.</summary>
     RenameDevice,
+    /// <summary>Set a matching app's session volume, optionally only on devices matching <see cref="RuleAction.DevicePattern"/>.</summary>
+    ApplicationVolume,
+    /// <summary>Set a matching app's session mute state (see <see cref="RuleAction.Muted"/>), optionally filtered by device.</summary>
+    ApplicationMute,
 }
 
 /// <summary>How a <see cref="ActionKind.WaveLinkMix"/> action relates a device to a mix.</summary>
@@ -97,13 +101,13 @@ public sealed class RuleCondition
     public string DevicePattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="DevicePattern"/> is matched.</summary>
-    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Exact;
 
     /// <summary>Process/executable pattern; required for <see cref="ConditionKind.Application"/>.</summary>
     public string AppPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="AppPattern"/> is matched.</summary>
-    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Exact;
 
     [JsonIgnore]
     public bool IsApplicationCondition => Kind == ConditionKind.Application;
@@ -144,27 +148,27 @@ public sealed class RuleAction
     /// <summary><see cref="ActionKind.WaveLinkMix"/> only: how the device relates to the mix.</summary>
     public MixMembership Membership { get; set; } = MixMembership.Include;
 
-    /// <summary><see cref="ActionKind.DeviceMute"/> only: target mute state (true = muted).</summary>
+    /// <summary><see cref="ActionKind.DeviceMute"/> / <see cref="ActionKind.ApplicationMute"/> only: target mute state (true = muted).</summary>
     public bool Muted { get; set; } = true;
 
-    /// <summary>Required for <see cref="ActionKind.ApplicationDevice"/>.</summary>
+    /// <summary>Required for <see cref="ActionKind.ApplicationDevice"/>, <see cref="ActionKind.ApplicationVolume"/> and <see cref="ActionKind.ApplicationMute"/>.</summary>
     public string AppPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="AppPattern"/> is matched.</summary>
-    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode AppMatchMode { get; set; } = PatternMatchMode.Exact;
 
     public string DevicePattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="DevicePattern"/> is matched.</summary>
-    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode DeviceMatchMode { get; set; } = PatternMatchMode.Exact;
 
     /// <summary><see cref="ActionKind.WaveLinkMix"/> only: matched against the Wave Link mix name.</summary>
     public string MixPattern { get; set; } = string.Empty;
 
     /// <summary>How <see cref="MixPattern"/> is matched.</summary>
-    public PatternMatchMode MixMatchMode { get; set; } = PatternMatchMode.Regex;
+    public PatternMatchMode MixMatchMode { get; set; } = PatternMatchMode.Exact;
 
-    /// <summary><see cref="ActionKind.DeviceVolume"/> only: target volume in [0, 1].</summary>
+    /// <summary><see cref="ActionKind.DeviceVolume"/> / <see cref="ActionKind.ApplicationVolume"/> only: target volume in [0, 1].</summary>
     public float Volume { get; set; } = 0.5f;
 
     /// <summary><see cref="ActionKind.RenameDevice"/> only: the literal FriendlyName to write.</summary>
@@ -192,6 +196,12 @@ public sealed class RuleAction
     public bool IsMuteAction => Kind == ActionKind.DeviceMute;
 
     [JsonIgnore]
+    public bool IsAppVolumeAction => Kind == ActionKind.ApplicationVolume;
+
+    [JsonIgnore]
+    public bool IsAppMuteAction => Kind == ActionKind.ApplicationMute;
+
+    [JsonIgnore]
     public EndpointFlow EffectiveFlow => Kind switch
     {
         ActionKind.ApplicationDevice or ActionKind.DefaultDevice => Flow,
@@ -213,6 +223,10 @@ public sealed class RuleAction
             !string.IsNullOrWhiteSpace(DevicePattern),
         ActionKind.RenameDevice =>
             !string.IsNullOrWhiteSpace(DevicePattern) && !string.IsNullOrWhiteSpace(NewName),
+        ActionKind.ApplicationVolume =>
+            !string.IsNullOrWhiteSpace(AppPattern) && Volume is >= 0f and <= 1f,
+        ActionKind.ApplicationMute =>
+            !string.IsNullOrWhiteSpace(AppPattern),
         _ => false,
     };
 
