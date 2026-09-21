@@ -22,6 +22,7 @@ public partial class SessionsViewModel : ObservableObject, IDisposable
     private readonly IRoutingApplier _applier;
     private readonly IDispatcherQueueProvider _dispatcher;
     private readonly IRulesService _rules;
+    private readonly IRuleMatcher _matcher;
     private readonly Lock _gate = new();
 
     private CancellationTokenSource? _refreshCts;
@@ -31,13 +32,15 @@ public partial class SessionsViewModel : ObservableObject, IDisposable
         IAudioEndpointService endpoints,
         IRoutingApplier applier,
         IDispatcherQueueProvider dispatcher,
-        IRulesService rules)
+        IRulesService rules,
+        IRuleMatcher matcher)
     {
         _sessions = sessions;
         _endpoints = endpoints;
         _applier = applier;
         _dispatcher = dispatcher;
         _rules = rules;
+        _matcher = matcher;
 
         _sessions.SessionsChanged += OnSessionsChanged;
         QueueRefresh();
@@ -74,6 +77,22 @@ public partial class SessionsViewModel : ObservableObject, IDisposable
                 TargetsApp(rule, row.Session)))
             .OrderByDescending(entry => entry.AlreadyMatches)
             .ToList();
+    }
+
+    /// <summary>
+    /// Answers "why is this app here?" for a row: the rule that pinned this session to its current
+    /// endpoint (or that Windows picked the device), plus the rules that came closest and why they
+    /// missed.
+    /// </summary>
+    public RouteExplanation ExplainRoute(SessionRow row)
+    {
+        ArgumentNullException.ThrowIfNull(row);
+
+        var endpoints = _endpoints.GetEndpoints(EndpointFlow.Render)
+            .Concat(_endpoints.GetEndpoints(EndpointFlow.Capture))
+            .ToList();
+
+        return RouteExplainer.Explain(row.Session, EndpointFlow.Render, _rules.Rules, endpoints, _sessions.GetSessions(), _matcher);
     }
 
     /// <summary>Creates a rule pinning this session's app to the endpoint it plays on today.</summary>

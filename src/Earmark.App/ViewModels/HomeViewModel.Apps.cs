@@ -338,6 +338,24 @@ public partial class HomeViewModel
         }
     }
 
+    /// <summary>
+    /// Answers "why is this app here?" for a chip: the rule that pinned it to its current endpoint
+    /// (or that Windows picked the device), plus the rules that came closest and why they missed.
+    /// Reads the live snapshot rather than the chip's cached route so the answer reflects the rules
+    /// as they stand right now.
+    /// </summary>
+    public RouteExplanation ExplainRoute(AppChip chip)
+    {
+        ArgumentNullException.ThrowIfNull(chip);
+
+        var sessions = _sessions.GetSessions();
+        var endpoints = _endpoints.GetEndpoints(EndpointFlow.Render)
+            .Concat(_endpoints.GetEndpoints(EndpointFlow.Capture))
+            .ToList();
+
+        return RouteExplainer.Explain(chip.Session, EndpointFlow.Render, _rules.Rules, endpoints, sessions, _matcher);
+    }
+
     /// <summary>Rebuilds <see cref="_hiddenAppKeys"/> and <see cref="_hiddenAppOnDeviceKeys"/> from
     /// settings and refreshes the count baselines used to detect changes in
     /// <see cref="OnSettingsChanged"/>.</summary>

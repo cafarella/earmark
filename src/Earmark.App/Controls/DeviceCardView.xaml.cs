@@ -2,6 +2,7 @@ using System.ComponentModel;
 
 using Earmark.App.ViewModels;
 using Earmark.App.Views;
+using Earmark.Core.Routing;
 
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -420,8 +421,20 @@ public sealed partial class DeviceCardView : UserControl
             flyout.Items.Add(BuildQuickControlsSettingsItem());
             return;
         }
-        if ((flyout.Target as FrameworkElement)?.Tag is not AppChip chip) return;
+        if (flyout.Target is not FrameworkElement { Tag: AppChip chip } anchor) return;
         flyout.Items.Clear();
+
+        // Informational, so it's fenced off from the actions below it.
+        var why = new MenuFlyoutItem
+        {
+            Text = "Why is it here?",
+            Icon = Glyph(""),
+            Tag = new RouteExplainTarget(chip, anchor),
+        };
+        why.Click += OnWhyIsItHereClicked;
+        ToolTipService.SetToolTip(why, "Show which rule put this app on this device - or that Windows chose it.");
+        flyout.Items.Add(why);
+        flyout.Items.Add(new MenuFlyoutSeparator());
 
         var hideApp = new MenuFlyoutSubItem { Text = "Hide this app", Icon = Glyph("") };
         var onDevice = new MenuFlyoutItem { Text = "On this device", Command = chip.HideOnDeviceCommand };
@@ -466,6 +479,29 @@ public sealed partial class DeviceCardView : UserControl
             flyout.Items.Add(new MenuFlyoutSeparator());
             AppendDeviceMenuItems(flyout.Items, owner);
         }
+    }
+
+    /// <summary>The chip's anchor travels with the click: the MenuFlyoutItem is gone by the time the
+    /// handler runs, so the explanation flyout needs the chip Border to open against.</summary>
+    private sealed record RouteExplainTarget(AppChip Chip, FrameworkElement Anchor);
+
+    private void OnWhyIsItHereClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: RouteExplainTarget target }) return;
+
+        // Defer so the context menu finishes dismissing; opening both at once leaves the menu's
+        // light-dismiss layer above the explanation.
+        DispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                RouteExplanationFlyout.ShowAt(target.Anchor, _viewModel.ExplainRoute(target.Chip));
+            }
+            catch (Exception ex)
+            {
+                _logger?.LogError(ex, "Why is it here: explaining the route threw");
+            }
+        });
     }
 
     // ---- Now-playing seek bar (custom; track/fill/thumb are RenderTransform-positioned so they glide) ----
@@ -834,5 +870,73 @@ public sealed partial class DeviceCardView : UserControl
                 _logger?.LogError(ex, "Customise: dialog threw");
             }
         });
+    }
+}
+
+/// <summary>
+/// The "Why is it here?" popup: the routing explanation for one app, shown from the Devices page's
+/// app chips and from the Sessions page's row menu. Built in code and shared by both so the two
+/// entry points can't drift apart.
+/// </summary>
+internal static class RouteExplanationFlyout
+{
+    private const double MaxContentWidth = 320;
+
+    public static void ShowAt(FrameworkElement target, RouteExplanation explanation)
+    {
+        ArgumentNullException.ThrowIfNull(target);
+        ArgumentNullException.ThrowIfNull(explanation);
+
+        var resources = Application.Current.Resources;
+        var muted = (Style)resources["MutedCaptionTextStyle"];
+
+        var panel = new StackPanel
+        {
+            MaxWidth = MaxContentWidth,
+            Spacing = (double)resources["SpacingSmall"],
+        };
+        panel.Children.Add(new TextBlock
+        {
+            Text = explanation.Summary,
+            TextWrapping = TextWrapping.WrapWholeWords,
+        });
+
+        if (explanation.NearMisses.Count > 0)
+        {
+            var misses = new StackPanel { Spacing = (double)resources["SpacingXXSmall"] };
+            misses.Children.Add(new TextBlock
+            {
+                Text = "Rules that did not apply:",
+                Style = muted,
+                TextWrapping = TextWrapping.WrapWholeWords,
+            });
+            foreach (var miss in explanation.NearMisses)
+            {
+                misses.Children.Add(new TextBlock
+                {
+                    Text = $"{miss.RuleName} - {miss.Reason}",
+                    Style = muted,
+                    TextWrapping = TextWrapping.WrapWholeWords,
+                });
+            }
+            panel.Children.Add(misses);
+        }
+
+        var flyout = new Flyout { Content = panel };
+
+        if (explanation.RuleId is Guid ruleId)
+        {
+            var open = new Button { Content = "Open in Rules", HorizontalAlignment = HorizontalAlignment.Left };
+            open.Click += (_, _) =>
+            {
+                flyout.Hide();
+                var services = App.Current.Services;
+                services.GetRequiredService<RulesViewModel>().RequestExpand(ruleId);
+                services.GetRequiredService<MainWindow>().NavigateByTag("Rules");
+            };
+            panel.Children.Add(open);
+        }
+
+        flyout.ShowAt(target);
     }
 }

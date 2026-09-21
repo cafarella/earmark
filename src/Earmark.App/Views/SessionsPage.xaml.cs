@@ -1,3 +1,4 @@
+using Earmark.App.Controls;
 using Earmark.App.ViewModels;
 
 using Microsoft.Extensions.DependencyInjection;
@@ -23,6 +24,17 @@ public sealed partial class SessionsPage : Page
         if (sender is not FrameworkElement button || button.Tag is not SessionRow row) return;
 
         var flyout = new MenuFlyout();
+
+        // Informational, so it's fenced off from the rule actions below it.
+        var why = new MenuFlyoutItem
+        {
+            Text = "Why is it here?",
+            Icon = new FontIcon { Glyph = "" },
+            Tag = new RouteExplainTarget(row, button),
+        };
+        why.Click += OnWhyIsItHereClicked;
+        flyout.Items.Add(why);
+        flyout.Items.Add(new MenuFlyoutSeparator());
 
         var create = new MenuFlyoutItem
         {
@@ -53,6 +65,16 @@ public sealed partial class SessionsPage : Page
         flyout.ShowAt(button);
     }
 
+    private void OnWhyIsItHereClicked(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement { Tag: RouteExplainTarget target }) return;
+
+        // Defer so the menu finishes dismissing; opening both at once leaves the menu's
+        // light-dismiss layer above the explanation.
+        DispatcherQueue.TryEnqueue(() =>
+            RouteExplanationFlyout.ShowAt(target.Anchor, ViewModel.ExplainRoute(target.Row)));
+    }
+
     private async void OnCreateRuleClicked(object sender, RoutedEventArgs e)
     {
         if (sender is not FrameworkElement item || item.Tag is not SessionRow row) return;
@@ -77,4 +99,8 @@ public sealed partial class SessionsPage : Page
     }
 
     private sealed record RuleMenuTarget(SessionRow Row, Guid RuleId);
+
+    /// <summary>The menu button travels with the click: the MenuFlyoutItem is gone by the time the
+    /// handler runs, so the explanation flyout needs it to open against.</summary>
+    private sealed record RouteExplainTarget(SessionRow Row, FrameworkElement Anchor);
 }
