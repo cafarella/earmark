@@ -40,6 +40,12 @@ public sealed record AudioEndpoint(
         ? FriendlyName
         : $"{FriendlyName} ({DeviceDescription})";
 
+    public string Name => !string.IsNullOrEmpty(DeviceDescription)
+        && FriendlyName.EndsWith($" ({DeviceDescription})", StringComparison.OrdinalIgnoreCase)
+        && FriendlyName.Length > DeviceDescription.Length + 3
+        ? FriendlyName[..^(DeviceDescription.Length + 3)]
+        : FriendlyName;
+
     /// <summary>
     /// Name for pickers / labels that avoids the doubled suffix some drivers produce, where the
     /// friendly name already ends with "(description)" (e.g. Elgato virtual devices, whose friendly

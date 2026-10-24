@@ -1,0 +1,16 @@
+<Window
+    x:Class="Earmark.Desktop.Views.QuickControlsWindow"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Earmark Quick Controls"
+    Width="424"
+    Height="120"
+    WindowDecorations="None"
+    CanResize="False"
+    ShowInTaskbar="False"
+    Topmost="True"
+    WindowStartupLocation="Manual"
+    Background="Transparent"
+    Icon="avares://Earmark/Assets/Earmark.ico">
+    <StackPanel x:Name="Stack" Spacing="8" />
+</Window>

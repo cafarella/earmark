@@ -1,21 +1,22 @@
 using Earmark.Core.Persistence;
-using Earmark.Core.Routing;
 using Earmark.Core.Services;
+using Earmark.Core.Settings;
 
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 
 namespace Earmark.Core;
 
 public static class CoreServiceCollectionExtensions
 {
-    public static IServiceCollection AddEarmarkCore(this IServiceCollection services, string? rulesPath = null)
+    public static IServiceCollection AddEarmarkCore(this IServiceCollection services, string rulesPath, string settingsPath)
     {
         ArgumentNullException.ThrowIfNull(services);
 
-        services.AddSingleton<IRuleStore>(_ => new JsonRuleStore(rulesPath ?? JsonRuleStore.DefaultPath));
+        services.AddSingleton<IRuleStore>(sp => new JsonRuleStore(rulesPath, sp.GetService<ILogger<JsonRuleStore>>()));
         services.AddSingleton<IRulesService, RulesService>();
-        services.AddSingleton<IRuleMatcher, RuleMatcher>();
-        services.AddSingleton<IRuleEvaluator, RuleEvaluator>();
+        services.AddSingleton(sp => new SettingsService(settingsPath, sp.GetService<ILogger<SettingsService>>()));
+        services.AddSingleton<DeviceDefaultsService>();
         return services;
     }
 }

@@ -105,7 +105,7 @@
       stream as an icon resource - without it, ARP and the Start Menu
       shortcut both fall back to the generic placeholder icon.
     -->
-    <Icon Id="EarmarkIcon.ico" SourceFile="$(sys.SOURCEFILEDIR)..\src\Earmark.App\Assets\AppIcon.ico" />
+    <Icon Id="EarmarkIcon.ico" SourceFile="$(sys.SOURCEFILEDIR)Earmark.ico" />
     <Property Id="ARPPRODUCTICON" Value="EarmarkIcon.ico" />
     <Property Id="ARPHELPLINK" Value="https://github.com/hoobio/earmark" />
     <Property Id="ARPURLINFOABOUT" Value="https://github.com/hoobio/earmark" />
@@ -127,7 +127,7 @@
         <Shortcut Id="EarmarkShortcut"
                   Name="Earmark$(var.ChannelLabel)"
                   Description="Per-app audio routing"
-                  Target="[INSTALLFOLDER]Earmark.App.exe"
+                  Target="[INSTALLFOLDER]Earmark.exe"
                   WorkingDirectory="INSTALLFOLDER"
                   Icon="EarmarkIcon.ico"
                   IconIndex="0" />
@@ -139,6 +139,24 @@
                        KeyPath="yes" />
       </Component>
     </StandardDirectory>
+
+    <?if $(var.Channel) = "Release" ?>
+    <Property Id="EXISTINGRUNVALUE">
+      <RegistrySearch Id="ExistingRunValue" Root="HKCU" Key="Software\Microsoft\Windows\CurrentVersion\Run" Name="Earmark" Type="raw" />
+    </Property>
+    <SetProperty Id="REPOINTRUNVALUE"
+                 Action="SetRepointRunValueTray"
+                 Value='"[INSTALLFOLDER]Earmark.exe" --tray'
+                 Condition="EXISTINGRUNVALUE ~&gt;&lt; INSTALLFOLDER AND EXISTINGRUNVALUE ~&gt;&lt; &quot;--tray&quot;"
+                 After="CostInitialize"
+                 Sequence="execute" />
+    <SetProperty Id="REPOINTRUNVALUE"
+                 Action="SetRepointRunValuePlain"
+                 Value='"[INSTALLFOLDER]Earmark.exe"'
+                 Condition="EXISTINGRUNVALUE ~&gt;&lt; INSTALLFOLDER AND NOT EXISTINGRUNVALUE ~&gt;&lt; &quot;--tray&quot;"
+                 After="CostInitialize"
+                 Sequence="execute" />
+    <?endif?>
 
     <Feature Id="Main" Title="Earmark$(var.ChannelLabel)" Level="1" AllowAdvertise="no" Display="expand" ConfigurableDirectory="INSTALLFOLDER">
       <ComponentGroupRef Id="EarmarkPayload" />
@@ -170,6 +188,23 @@
                   DllEntry="WixShellExec"
                   Impersonate="yes" />
 
+    <!-- A tray-parked Earmark cancels WM_CLOSE, so util:CloseApplication cannot free the files; this ends the 1.1.0 Earmark.App.exe and Earmark.exe running from this install folder only. -->
+    <SetProperty Id="WixQuietExecCmdLine"
+                 Action="SetStopEarmarkCmdLine"
+                 Value='"[System64Folder]WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -Command "Get-Process Earmark,Earmark.App -ErrorAction SilentlyContinue | Where-Object Path -like &apos;[INSTALLFOLDER]*&apos; | Stop-Process -Force"'
+                 Before="StopEarmark"
+                 Sequence="execute" />
+    <CustomAction Id="StopEarmark"
+                  DllEntry="WixQuietExec"
+                  BinaryRef="Wix4UtilCA_$(sys.BUILDARCHSHORT)"
+                  Execute="immediate"
+                  Impersonate="yes"
+                  Return="ignore" />
+
+    <InstallExecuteSequence>
+      <Custom Action="StopEarmark" Before="InstallValidate" />
+    </InstallExecuteSequence>
+
     <ui:WixUI Id="WixUI_InstallDir" InstallDirectory="INSTALLFOLDER" />
     <WixVariable Id="WixUILicenseRtf" Value="$(sys.SOURCEFILEDIR)License.rtf" />
     <!--
@@ -180,7 +215,7 @@
       - WixUIDialogBmp  (493x312): full background for the Welcome and Exit
         dialogs; only the left ~164 px strip is visible (the rest is covered
         by the dialog's text panel).
-      Both are generated from src\Earmark.App\Assets\logo.png and checked in
+      Both are generated from the Earmark logo and checked in
       next to this .wxs.
     -->
     <WixVariable Id="WixUIBannerBmp" Value="$(sys.SOURCEFILEDIR)WixUIBannerBmp.bmp" />
@@ -197,7 +232,7 @@
   </Package>
 
   <!--
-    Payload harvest. Earmark.App.exe gets an explicit File Id so WixShellExec can
+    Payload harvest. Earmark.exe gets an explicit File Id so WixShellExec can
     target it via [#EarmarkAppExe]; everything else is auto-harvested by <Files>.
   -->
   <Fragment>
@@ -206,11 +241,22 @@
            unique per channel so the products don't share component reference counts. -->
       <Component Id="EarmarkAppExeComponent" Guid="*">
         <File Id="EarmarkAppExe"
-              Source="$(var.PayloadDir)\Earmark.App.exe"
+              Source="$(var.PayloadDir)\Earmark.exe"
               KeyPath="yes" />
       </Component>
+      <?if $(var.Channel) = "Release" ?>
+      <!-- 1.1.0 registered Earmark.App.exe for login start; repoint an existing value at Earmark.exe so an upgrade keeps starting at login. -->
+      <Component Id="RunAtLoginRepoint" Guid="*" Condition="REPOINTRUNVALUE">
+        <RegistryValue Root="HKCU"
+                       Key="Software\Microsoft\Windows\CurrentVersion\Run"
+                       Name="Earmark"
+                       Type="string"
+                       Value="[REPOINTRUNVALUE]"
+                       KeyPath="yes" />
+      </Component>
+      <?endif?>
       <Files Include="$(var.PayloadDir)\**">
-        <Exclude Files="$(var.PayloadDir)\Earmark.App.exe" />
+        <Exclude Files="$(var.PayloadDir)\Earmark.exe" />
       </Files>
     </ComponentGroup>
   </Fragment>

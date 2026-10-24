@@ -1,0 +1,72 @@
+<UserControl
+    x:Class="Earmark.Desktop.Views.SessionsPage"
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:vm="using:Earmark.Desktop.ViewModels"
+    xmlns:ctl="using:Earmark.Desktop.Controls"
+    x:DataType="vm:SessionsViewModel"
+    Padding="{StaticResource PageGutter}">
+    <UserControl.Resources>
+        <DataTemplate x:Key="AppCardTemplate" x:DataType="vm:AppBlock">
+            <Border Classes="SessionRow">
+                <Grid ColumnDefinitions="Auto,*,Auto" ColumnSpacing="16">
+                    <Panel Width="10" Height="10" VerticalAlignment="Top" Margin="0,5,0,0">
+                        <Ellipse Width="10" Height="10" Fill="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsActive}" />
+                    </Panel>
+                    <StackPanel Grid.Column="1" VerticalAlignment="Top">
+                        <TextBlock Classes="Body" Text="{Binding Title}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Classes="Caption" Text="{Binding Detail}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    </StackPanel>
+                    <ItemsControl Grid.Column="2" ItemsSource="{Binding Sections}" HorizontalAlignment="Right">
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate x:DataType="vm:DirectionSection">
+                                <StackPanel HorizontalAlignment="Right">
+                                    <TextBlock Classes="Caption" Text="{Binding Direction}" HorizontalAlignment="Right" Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                                    <ItemsControl ItemsSource="{Binding Devices}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="vm:DeviceLine">
+                                                <StackPanel Orientation="Horizontal" Spacing="6" HorizontalAlignment="Right">
+                                                    <Ellipse Width="6" Height="6" VerticalAlignment="Center" Fill="{DynamicResource SystemFillColorSuccessBrush}" IsVisible="{Binding IsActive}" />
+                                                    <TextBlock Classes="Body" FontWeight="Normal" Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </Grid>
+            </Border>
+        </DataTemplate>
+    </UserControl.Resources>
+
+    <Grid RowDefinitions="Auto,*" RowSpacing="16">
+        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+            <TextBlock Classes="PageTitle" Text="Sessions" VerticalAlignment="Center" />
+            <Button Grid.Column="1" Click="OnRefreshClick" ToolTip.Tip="Refresh the session list">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="Glyph" Text="{StaticResource Glyph.Refresh}" />
+                    <TextBlock Text="Refresh" />
+                </StackPanel>
+            </Button>
+            <Button Grid.Column="2" Click="OnReapplyClick" ToolTip.Tip="Apply every rule again now">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <TextBlock Classes="Glyph" Text="{StaticResource Glyph.Sync}" />
+                    <TextBlock Text="Reapply rules" />
+                </StackPanel>
+            </Button>
+        </Grid>
+
+        <TextBlock Grid.Row="1" Classes="Caption" IsVisible="{Binding IsEmpty}" Text="No apps are using audio. Open an app that plays or records sound and it will show up here." Foreground="{DynamicResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+        <ScrollViewer Grid.Row="1" IsVisible="{Binding !IsEmpty}" ctl:AutoScroll.IsEnabled="True">
+            <ItemsControl ItemsSource="{Binding Apps}" ItemTemplate="{StaticResource AppCardTemplate}">
+                <ItemsControl.ItemsPanel>
+                    <ItemsPanelTemplate>
+                        <StackPanel Classes="SettingsGroup" />
+                    </ItemsPanelTemplate>
+                </ItemsControl.ItemsPanel>
+            </ItemsControl>
+        </ScrollViewer>
+    </Grid>
+</UserControl>

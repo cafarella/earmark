@@ -3,6 +3,8 @@ using System.Text.Json.Serialization;
 
 using Earmark.Core.Models;
 
+using Microsoft.Extensions.Logging;
+
 namespace Earmark.Core.Persistence;
 
 [JsonSourceGenerationOptions(
@@ -11,6 +13,7 @@ namespace Earmark.Core.Persistence;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     UseStringEnumConverter = true)]
 [JsonSerializable(typeof(List<RoutingRule>))]
+[JsonSerializable(typeof(RoutingRule))]
 internal sealed partial class RuleJsonContext : JsonSerializerContext;
 
 public sealed class JsonRuleStore : IRuleStore, IDisposable
@@ -19,21 +22,21 @@ public sealed class JsonRuleStore : IRuleStore, IDisposable
 
     private readonly string _path;
     private readonly SemaphoreSlim _gate = new(1, 1);
+    private readonly BlockedSaveLog _blockedLog;
+    private volatile bool _saveBlocked;
 
-    public JsonRuleStore(string path)
+    public JsonRuleStore(string path, ILogger<JsonRuleStore>? logger = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(path);
         _path = path;
+        _blockedLog = new BlockedSaveLog(logger);
     }
 
-    // Fallback only: the app passes an explicit channel-aware path (see HostBuilderExtensions).
-    // Lives in %APPDATA% rather than the OneDrive-backed Documents folder. The Core layer can't
-    // know the build channel, so this base path carries no channel segment.
-    public static string DefaultPath { get; } = Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        "Hoobi",
-        "Earmark",
-        "rules.json");
+    public bool IsSaveBlocked => _saveBlocked;
+
+    public bool IsCorrupt { get; private set; }
+
+    public string? CorruptCopyPath { get; private set; }
 
     public async ValueTask<IReadOnlyList<RoutingRule>> LoadAsync(CancellationToken ct = default)
     {
@@ -42,15 +45,28 @@ public sealed class JsonRuleStore : IRuleStore, IDisposable
         {
             if (!File.Exists(_path))
             {
+                _saveBlocked = false;
                 return Array.Empty<RoutingRule>();
             }
 
-            await using var stream = File.OpenRead(_path);
-            var rules = await JsonSerializer
-                .DeserializeAsync(stream, RuleJsonContext.Default.ListRoutingRule, ct)
-                .ConfigureAwait(false);
-
-            return rules ?? new List<RoutingRule>();
+            try
+            {
+                var bytes = await AtomicFile.ReadAsync(_path, ct).ConfigureAwait(false);
+                var rules = JsonSerializer.Deserialize(bytes, RuleJsonContext.Default.ListRoutingRule);
+                (_saveBlocked, IsCorrupt) = (false, false);
+                return rules ?? new List<RoutingRule>();
+            }
+            catch (JsonException)
+            {
+                (_saveBlocked, IsCorrupt) = (true, true);
+                CorruptCopyPath = CorruptCopy.TryCreate(_path);
+                throw;
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                (_saveBlocked, IsCorrupt) = (true, false);
+                throw;
+            }
         }
         finally
         {
@@ -65,34 +81,24 @@ public sealed class JsonRuleStore : IRuleStore, IDisposable
         await _gate.WaitAsync(ct).ConfigureAwait(false);
         try
         {
-            Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
-
-            await using var buffer = new MemoryStream();
-            await JsonSerializer
-                .SerializeAsync(buffer, rules.ToList(), RuleJsonContext.Default.ListRoutingRule, ct)
-                .ConfigureAwait(false);
-
-            var bytes = buffer.ToArray();
-            for (var attempt = 0; attempt < 5; attempt++)
+            if (_saveBlocked)
             {
-                try
-                {
-                    await File.WriteAllBytesAsync(_path, bytes, ct).ConfigureAwait(false);
-                    return;
-                }
-                catch (IOException) when (attempt < 4)
-                {
-                    await Task.Delay(100 * (attempt + 1), ct).ConfigureAwait(false);
-                }
-                catch (UnauthorizedAccessException) when (attempt < 4)
-                {
-                    await Task.Delay(100 * (attempt + 1), ct).ConfigureAwait(false);
-                }
+                _blockedLog.Warn(_path);
+                throw new InvalidOperationException(
+                    $"'{_path}' failed to load, so saving is disabled to keep it intact. Reload it or discard it first.");
             }
+
+            var bytes = JsonSerializer.SerializeToUtf8Bytes(rules.ToList(), RuleJsonContext.Default.ListRoutingRule);
+            await AtomicFile.WriteAsync(_path, bytes, ct).ConfigureAwait(false);
         }
         finally
         {
             _gate.Release();
         }
     }
+
+    public void UnblockSaves() => _saveBlocked = false;
+
+    public static string Fingerprint(RoutingRule rule) =>
+        JsonSerializer.Serialize(rule, RuleJsonContext.Default.RoutingRule);
 }

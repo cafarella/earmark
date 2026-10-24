@@ -6,10 +6,18 @@ public interface IRulesService
 {
     IReadOnlyList<RoutingRule> Rules { get; }
     event EventHandler? RulesChanged;
+
+    bool IsSaveBlocked { get; }
+
+    bool IsCorrupt { get; }
+
+    string? CorruptCopyPath { get; }
+
+    void UnblockSaves();
+
     Task LoadAsync(CancellationToken ct = default);
     Task UpsertAsync(RoutingRule rule, CancellationToken ct = default);
 
-    /// <summary>Inserts a new rule at <paramref name="index"/> (clamped to the list bounds).</summary>
     Task InsertAsync(RoutingRule rule, int index, CancellationToken ct = default);
 
     Task DeleteAsync(Guid ruleId, CancellationToken ct = default);

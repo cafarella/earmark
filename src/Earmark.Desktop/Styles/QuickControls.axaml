@@ -1,0 +1,25 @@
+<Styles
+    xmlns="https://github.com/avaloniaui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Styles.Resources>
+        <ControlTheme x:Key="QuickControlsPanel" TargetType="ContentControl">
+            <Setter Property="Background" Value="{DynamicResource WindowGroundBrush}" />
+            <Setter Property="Template">
+                <ControlTemplate>
+                    <Border Background="{TemplateBinding Background}" CornerRadius="{StaticResource OverlayCornerRadius}" ClipToBounds="True">
+                        <ScrollViewer VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled">
+                            <ContentPresenter Margin="4" Content="{TemplateBinding Content}" />
+                        </ScrollViewer>
+                    </Border>
+                </ControlTemplate>
+            </Setter>
+        </ControlTheme>
+    </Styles.Resources>
+
+    <Style Selector="ContentControl.QuickPanel.Acrylic">
+        <Setter Property="Background" Value="#B81F2430" />
+    </Style>
+    <Style Selector="ContentControl.QuickPanel.Acrylic Border.DeviceCard">
+        <Setter Property="Background" Value="#80232834" />
+    </Style>
+</Styles>

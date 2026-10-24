@@ -14,23 +14,29 @@ public sealed record AppRouteMatch(RoutingRule Rule, RuleAction Action, AudioEnd
 
 public sealed record DefaultDeviceMatch(RoutingRule Rule, RuleAction Action, AudioEndpoint Endpoint);
 
-public interface IRuleMatcher
+public static class RuleMatcher
 {
-    AppRouteMatch? FindAppRoute(AudioSession session, EndpointFlow flow, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions);
+    // endpoints must hold both flows: a capture-device condition is evaluated against capture endpoints even when the action routes output.
+    public static IReadOnlyDictionary<Guid, bool> EvaluateConditions(
+        IReadOnlyList<RoutingRule> rules,
+        IReadOnlyList<AudioEndpoint> endpoints,
+        IReadOnlyList<AudioSession> sessions)
+    {
+        ArgumentNullException.ThrowIfNull(rules);
+        var met = new Dictionary<Guid, bool>(rules.Count);
+        foreach (var rule in rules)
+        {
+            met[rule.Id] = ConditionsMet(rule, endpoints, sessions);
+        }
+        return met;
+    }
 
-    DefaultDeviceMatch? FindDefaultDevice(EndpointFlow flow, DefaultRoleKind roleKind, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions);
-
-    bool ConditionsMet(RoutingRule rule, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions);
-}
-
-public sealed class RuleMatcher : IRuleMatcher
-{
-    public AppRouteMatch? FindAppRoute(AudioSession session, EndpointFlow flow, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions)
+    public static AppRouteMatch? FindAppRoute(AudioSession session, EndpointFlow flow, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyDictionary<Guid, bool> met)
     {
         ArgumentNullException.ThrowIfNull(session);
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(endpoints);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(met);
 
         foreach (var rule in rules)
         {
@@ -39,8 +45,7 @@ public sealed class RuleMatcher : IRuleMatcher
                 continue;
             }
 
-            var met = ConditionsMet(rule, endpoints, sessions);
-            foreach (var action in rule.ActiveActions(met))
+            foreach (var action in rule.ActiveActions(met[rule.Id]))
             {
                 if (action.Kind != ActionKind.ApplicationDevice || action.Flow != flow || !action.IsValid)
                 {
@@ -63,11 +68,11 @@ public sealed class RuleMatcher : IRuleMatcher
         return null;
     }
 
-    public DefaultDeviceMatch? FindDefaultDevice(EndpointFlow flow, DefaultRoleKind roleKind, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions)
+    public static DefaultDeviceMatch? FindDefaultDevice(EndpointFlow flow, DefaultRoleKind roleKind, IReadOnlyList<RoutingRule> rules, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyDictionary<Guid, bool> met)
     {
         ArgumentNullException.ThrowIfNull(rules);
         ArgumentNullException.ThrowIfNull(endpoints);
-        ArgumentNullException.ThrowIfNull(sessions);
+        ArgumentNullException.ThrowIfNull(met);
 
         foreach (var rule in rules)
         {
@@ -76,8 +81,7 @@ public sealed class RuleMatcher : IRuleMatcher
                 continue;
             }
 
-            var met = ConditionsMet(rule, endpoints, sessions);
-            foreach (var action in rule.ActiveActions(met))
+            foreach (var action in rule.ActiveActions(met[rule.Id]))
             {
                 if (action.Kind != ActionKind.DefaultDevice || action.Flow != flow || !action.IsValid)
                 {
@@ -103,7 +107,7 @@ public sealed class RuleMatcher : IRuleMatcher
         return null;
     }
 
-    public bool ConditionsMet(RoutingRule rule, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions)
+    public static bool ConditionsMet(RoutingRule rule, IReadOnlyList<AudioEndpoint> endpoints, IReadOnlyList<AudioSession> sessions)
     {
         ArgumentNullException.ThrowIfNull(rule);
         ArgumentNullException.ThrowIfNull(endpoints);
@@ -243,33 +247,6 @@ public sealed class RuleMatcher : IRuleMatcher
 /// </summary>
 public static class PatternMatcher
 {
-    public static bool Matches(string pattern, Regex? regex, string candidate)
-    {
-        if (string.IsNullOrEmpty(candidate))
-        {
-            return false;
-        }
-
-        if (string.Equals(pattern, candidate, StringComparison.OrdinalIgnoreCase))
-        {
-            return true;
-        }
-
-        if (regex is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            return regex.IsMatch(candidate);
-        }
-        catch (RegexMatchTimeoutException)
-        {
-            return false;
-        }
-    }
-
     /// <summary>
     /// Mode-aware match. The case-insensitive exact-string check is a fast path for all modes and
     /// the entire behaviour for <see cref="PatternMatchMode.Exact"/>. Wildcard and Regex fall back
